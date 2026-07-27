@@ -1,0 +1,155 @@
+{
+  "schema_version": "1.0",
+  "provider": "chatgpt",
+  "version": "1.0.2",
+  "home_url": "https://chatgpt.com/",
+  "allowed_origins": [
+    "https://chatgpt.com"
+  ],
+  "auth_origins": [
+    "https://auth.openai.com",
+    "https://accounts.google.com",
+    "https://login.microsoftonline.com"
+  ],
+  "capabilities": [
+    "conversation.new",
+    "conversation.continue",
+    "conversation.import",
+    "message.send",
+    "response.stream",
+    "attachment.upload",
+    "artifact.download"
+  ],
+  "authenticated": [
+    {
+      "kind": "css",
+      "value": "#prompt-textarea"
+    },
+    {
+      "kind": "css",
+      "value": "[data-testid='composer']"
+    }
+  ],
+  "message_input": [
+    {
+      "kind": "css",
+      "value": "#prompt-textarea"
+    },
+    {
+      "kind": "css",
+      "value": "div[contenteditable='true'][data-virtualkeyboard='true']"
+    }
+  ],
+  "send_button": [
+    {
+      "kind": "css",
+      "value": "button[data-testid='send-button']"
+    },
+    {
+      "kind": "role",
+      "value": "button",
+      "name": "Send prompt"
+    }
+  ],
+  "user_message": [
+    {
+      "kind": "css",
+      "value": "[data-message-author-role='user']"
+    }
+  ],
+  "response": [
+    {
+      "kind": "css",
+      "value": "[data-message-author-role='assistant'] .markdown"
+    },
+    {
+      "kind": "css",
+      "value": "[data-message-author-role='assistant']"
+    }
+  ],
+  "generation_active": [
+    {
+      "kind": "css",
+      "value": "button[data-testid='stop-button']"
+    },
+    {
+      "kind": "role",
+      "value": "button",
+      "name": "Stop generating"
+    }
+  ],
+  "attachment_input": [
+    {
+      "kind": "css",
+      "value": "input[type='file']"
+    }
+  ],
+  "attachment_button": [
+    {
+      "kind": "css",
+      "value": "button[aria-label*='Attach']"
+    },
+    {
+      "kind": "css",
+      "value": "button[data-testid='composer-plus-btn']"
+    }
+  ],
+  "attachment_ready": [
+    {
+      "kind": "css",
+      "value": "[data-testid*='attachment'], [class*='file']"
+    }
+  ],
+  "artifact": [
+    {
+      "kind": "css",
+      "value": "[data-message-author-role='assistant'] a[download]"
+    },
+    {
+      "kind": "css",
+      "value": "[data-message-author-role='assistant'] a[href*='/mnt/data/']"
+    }
+  ],
+  "unauthenticated": [
+    {
+      "kind": "css",
+      "value": "a[href*='/auth/login']"
+    },
+    {
+      "kind": "css",
+      "value": "a[href*='/auth/signup']"
+    },
+    {
+      "kind": "css",
+      "value": "button[data-testid='login-button']"
+    },
+    {
+      "kind": "css",
+      "value": "button[data-testid='signup-button']"
+    },
+    {
+      "kind": "role",
+      "value": "button",
+      "name": "Log in",
+      "exact": true
+    },
+    {
+      "kind": "role",
+      "value": "button",
+      "name": "Sign up",
+      "exact": true
+    },
+    {
+      "kind": "role",
+      "value": "link",
+      "name": "Log in",
+      "exact": true
+    },
+    {
+      "kind": "role",
+      "value": "link",
+      "name": "Sign up",
+      "exact": true
+    }
+  ]
+}

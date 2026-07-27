@@ -1,0 +1,14 @@
+fastapi<1,>=0.115
+platformdirs<5,>=4
+playwright<2,>=1.50
+pydantic<3,>=2.10
+PyYAML<7,>=6
+jsonschema<5,>=4.23
+typer<1,>=0.15
+uvicorn<1,>=0.34
+
+[dev]
+build<2,>=1.2
+httpx<1,>=0.28
+pytest<10,>=8
+pytest-asyncio<2,>=0.25

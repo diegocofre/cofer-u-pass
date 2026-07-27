@@ -1,0 +1,7 @@
+include LICENSE README.md RUNBOOK.md SECURITY.md CHANGELOG.md VALIDATION.md pyproject.toml
+recursive-include docs *.md *.json
+recursive-include schemas *.json
+recursive-include examples *.yaml *.yml *.json *.toml *.py
+recursive-include tests *.py *.html *.json *.yaml *.yml
+recursive-include scripts *.py *.sh *.ps1
+recursive-include src/cofer_u_pass/adapters *.json

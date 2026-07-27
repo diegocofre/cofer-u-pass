@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0",
+  "provider": "gemini",
+  "version": "1.0.1",
+  "home_url": "https://gemini.google.com/",
+  "allowed_origins": [
+    "https://gemini.google.com"
+  ],
+  "auth_origins": [
+    "https://accounts.google.com",
+    "https://myaccount.google.com"
+  ],
+  "capabilities": [
+    "conversation.new",
+    "conversation.continue",
+    "conversation.import",
+    "message.send",
+    "response.stream",
+    "attachment.upload",
+    "artifact.download"
+  ],
+  "authenticated": [
+    {
+      "kind": "css",
+      "value": "rich-textarea"
+    },
+    {
+      "kind": "css",
+      "value": "div[contenteditable='true']"
+    }
+  ],
+  "message_input": [
+    {
+      "kind": "css",
+      "value": "rich-textarea div[contenteditable='true']"
+    },
+    {
+      "kind": "css",
+      "value": "div[contenteditable='true'][role='textbox']"
+    }
+  ],
+  "send_button": [
+    {
+      "kind": "css",
+      "value": "button[aria-label*='Send']"
+    },
+    {
+      "kind": "css",
+      "value": "button.send-button"
+    }
+  ],
+  "user_message": [
+    {
+      "kind": "css",
+      "value": "user-query"
+    }
+  ],
+  "response": [
+    {
+      "kind": "css",
+      "value": "model-response .markdown-main-panel"
+    },
+    {
+      "kind": "css",
+      "value": "model-response"
+    }
+  ],
+  "generation_active": [
+    {
+      "kind": "css",
+      "value": "button[aria-label*='Stop']"
+    },
+    {
+      "kind": "css",
+      "value": ".stop-button"
+    }
+  ],
+  "attachment_input": [
+    {
+      "kind": "css",
+      "value": "input[type='file']"
+    }
+  ],
+  "attachment_button": [
+    {
+      "kind": "css",
+      "value": "button[aria-label*='Upload'], button[aria-label*='Add file']"
+    }
+  ],
+  "attachment_ready": [
+    {
+      "kind": "css",
+      "value": ".file-preview, [class*='attachment']"
+    }
+  ],
+  "artifact": [
+    {
+      "kind": "css",
+      "value": "model-response a[download], model-response a[href]"
+    }
+  ]
+}

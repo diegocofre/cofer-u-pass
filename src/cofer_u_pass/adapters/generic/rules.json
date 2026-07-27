@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "provider": "generic",
+  "version": "1.0.1",
+  "home_url": "http://127.0.0.1:9876/",
+  "allowed_origins": [
+    "http://127.0.0.1:9876"
+  ],
+  "auth_origins": [],
+  "capabilities": [
+    "conversation.new",
+    "message.send",
+    "response.stream",
+    "attachment.upload",
+    "artifact.download"
+  ],
+  "authenticated": [
+    {
+      "kind": "css",
+      "value": "[data-cofer-authenticated='true']"
+    }
+  ],
+  "message_input": [
+    {
+      "kind": "css",
+      "value": "[data-cofer-message-input]"
+    }
+  ],
+  "send_button": [
+    {
+      "kind": "css",
+      "value": "[data-cofer-send]"
+    }
+  ],
+  "user_message": [
+    {
+      "kind": "css",
+      "value": "[data-cofer-user-message]"
+    }
+  ],
+  "response": [
+    {
+      "kind": "css",
+      "value": "[data-cofer-response]"
+    }
+  ],
+  "generation_active": [
+    {
+      "kind": "css",
+      "value": "[data-cofer-generating='true']"
+    }
+  ],
+  "attachment_input": [
+    {
+      "kind": "css",
+      "value": "input[type='file'][data-cofer-attachment]"
+    }
+  ],
+  "attachment_ready": [
+    {
+      "kind": "css",
+      "value": "[data-cofer-attachment-ready]"
+    }
+  ],
+  "artifact": [
+    {
+      "kind": "css",
+      "value": "a[data-cofer-artifact]"
+    }
+  ]
+}

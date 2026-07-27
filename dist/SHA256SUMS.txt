@@ -1,0 +1,2 @@
+0cdf9b8a1d1c1333ab033a714dfe38355bd63387a7267ee2db47baa865c2ed3e  dist/cofer_u_pass-1.0.3-py3-none-any.whl
+59af617fa348361be00eb297333468e7587d60aca4b1bb73d05f156037cbbb6d  dist/cofer_u_pass-1.0.3.tar.gz

@@ -1,0 +1,221 @@
+{
+  "$defs": {
+    "ApiConfig": {
+      "properties": {
+        "host": {
+          "default": "127.0.0.1",
+          "title": "Host",
+          "type": "string"
+        },
+        "port": {
+          "default": 8765,
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Port",
+          "type": "integer"
+        },
+        "token_file": {
+          "default": "secrets/api-token",
+          "title": "Token File",
+          "type": "string"
+        },
+        "cors_origins": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cors Origins",
+          "type": "array"
+        }
+      },
+      "title": "ApiConfig",
+      "type": "object"
+    },
+    "BrowserConfig": {
+      "properties": {
+        "global_concurrency": {
+          "default": 2,
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Global Concurrency",
+          "type": "integer"
+        },
+        "headless_default": {
+          "default": false,
+          "title": "Headless Default",
+          "type": "boolean"
+        },
+        "action_timeout_seconds": {
+          "default": 90,
+          "exclusiveMinimum": 1,
+          "maximum": 3600,
+          "title": "Action Timeout Seconds",
+          "type": "number"
+        },
+        "response_stability_seconds": {
+          "default": 1.5,
+          "maximum": 30,
+          "minimum": 0.25,
+          "title": "Response Stability Seconds",
+          "type": "number"
+        }
+      },
+      "title": "BrowserConfig",
+      "type": "object"
+    },
+    "DoctorConfig": {
+      "properties": {
+        "screenshots": {
+          "default": false,
+          "title": "Screenshots",
+          "type": "boolean"
+        },
+        "dom_fragments": {
+          "default": true,
+          "title": "Dom Fragments",
+          "type": "boolean"
+        },
+        "network_diagnostics": {
+          "default": false,
+          "title": "Network Diagnostics",
+          "type": "boolean"
+        }
+      },
+      "title": "DoctorConfig",
+      "type": "object"
+    },
+    "HookConfig": {
+      "properties": {
+        "timeout_seconds": {
+          "default": 60,
+          "title": "Timeout Seconds",
+          "type": "number"
+        },
+        "max_input_bytes": {
+          "default": 2097152,
+          "title": "Max Input Bytes",
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "default": 2097152,
+          "title": "Max Output Bytes",
+          "type": "integer"
+        }
+      },
+      "title": "HookConfig",
+      "type": "object"
+    },
+    "RetentionConfig": {
+      "properties": {
+        "events_days": {
+          "default": 30,
+          "title": "Events Days",
+          "type": "integer"
+        },
+        "evidence_days": {
+          "default": 30,
+          "title": "Evidence Days",
+          "type": "integer"
+        },
+        "backups_days": {
+          "default": 30,
+          "title": "Backups Days",
+          "type": "integer"
+        },
+        "artifacts_days": {
+          "default": 90,
+          "title": "Artifacts Days",
+          "type": "integer"
+        },
+        "completed_runs_days": {
+          "default": 90,
+          "title": "Completed Runs Days",
+          "type": "integer"
+        }
+      },
+      "title": "RetentionConfig",
+      "type": "object"
+    },
+    "SecurityConfig": {
+      "properties": {
+        "max_input_file_bytes": {
+          "default": 104857600,
+          "title": "Max Input File Bytes",
+          "type": "integer"
+        },
+        "max_artifact_bytes": {
+          "default": 524288000,
+          "title": "Max Artifact Bytes",
+          "type": "integer"
+        },
+        "allowed_input_extensions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Input Extensions",
+          "type": "array"
+        },
+        "allowed_artifact_extensions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Artifact Extensions",
+          "type": "array"
+        }
+      },
+      "title": "SecurityConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "data_root": {
+      "title": "Data Root",
+      "type": "string"
+    },
+    "temp_root": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Temp Root"
+    },
+    "log_level": {
+      "default": "INFO",
+      "title": "Log Level",
+      "type": "string"
+    },
+    "browser": {
+      "$ref": "#/$defs/BrowserConfig"
+    },
+    "api": {
+      "$ref": "#/$defs/ApiConfig"
+    },
+    "security": {
+      "$ref": "#/$defs/SecurityConfig"
+    },
+    "retention": {
+      "$ref": "#/$defs/RetentionConfig"
+    },
+    "hooks": {
+      "$ref": "#/$defs/HookConfig"
+    },
+    "doctor": {
+      "$ref": "#/$defs/DoctorConfig"
+    }
+  },
+  "required": [
+    "data_root"
+  ],
+  "title": "AppConfig",
+  "type": "object"
+}

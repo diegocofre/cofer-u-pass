@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "provider": "generic",
+  "adapter_version": "1.0.1",
+  "engine_contract": "1.0",
+  "rule_version": "1.0.1",
+  "rule_schema_version": "1.0",
+  "capabilities": [
+    "conversation.new",
+    "message.send",
+    "response.stream",
+    "attachment.upload",
+    "artifact.download"
+  ],
+  "allowed_origins": [
+    "http://127.0.0.1:9876"
+  ],
+  "compatibility": {
+    "python": ">=3.11,<3.14",
+    "playwright": ">=1.50,<2",
+    "chromium": "playwright-managed"
+  },
+  "supports_headless_execution": true,
+  "supports_headless_authentication_check": true
+}

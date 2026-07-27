@@ -1,0 +1,72 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "provider": {
+      "title": "Provider",
+      "type": "string"
+    },
+    "adapter_version": {
+      "title": "Adapter Version",
+      "type": "string"
+    },
+    "engine_contract": {
+      "default": "1.0",
+      "title": "Engine Contract",
+      "type": "string"
+    },
+    "rule_version": {
+      "title": "Rule Version",
+      "type": "string"
+    },
+    "rule_schema_version": {
+      "default": "1.0",
+      "title": "Rule Schema Version",
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "allowed_origins": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Origins",
+      "type": "array"
+    },
+    "supports_headless_execution": {
+      "default": false,
+      "title": "Supports Headless Execution",
+      "type": "boolean"
+    },
+    "supports_headless_authentication_check": {
+      "default": false,
+      "title": "Supports Headless Authentication Check",
+      "type": "boolean"
+    },
+    "compatibility": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Compatibility",
+      "type": "object"
+    }
+  },
+  "required": [
+    "provider",
+    "adapter_version",
+    "rule_version",
+    "capabilities",
+    "allowed_origins"
+  ],
+  "title": "AdapterManifest",
+  "type": "object"
+}

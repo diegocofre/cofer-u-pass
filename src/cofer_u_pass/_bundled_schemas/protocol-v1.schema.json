@@ -1,0 +1,114 @@
+{
+  "$defs": {
+    "ProtocolOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "open_conversation",
+            "attach_files",
+            "send_message",
+            "capture_response",
+            "download_artifacts",
+            "hook",
+            "checkpoint",
+            "finalize"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 3600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Seconds"
+        },
+        "retry_attempts": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retry Attempts"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ProtocolOperation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "protocol_id": {
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "title": "Protocol Id",
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "engine_contract": {
+      "default": "1.0",
+      "title": "Engine Contract",
+      "type": "string"
+    },
+    "required_capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Capabilities",
+      "type": "array"
+    },
+    "input_schema": {
+      "additionalProperties": true,
+      "title": "Input Schema",
+      "type": "object"
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/ProtocolOperation"
+      },
+      "minItems": 1,
+      "title": "Operations",
+      "type": "array"
+    },
+    "output_contract": {
+      "additionalProperties": true,
+      "title": "Output Contract",
+      "type": "object"
+    }
+  },
+  "required": [
+    "protocol_id",
+    "version",
+    "operations"
+  ],
+  "title": "ProtocolDefinition",
+  "type": "object"
+}

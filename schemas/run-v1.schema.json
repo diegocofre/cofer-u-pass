@@ -1,0 +1,292 @@
+{
+  "$defs": {
+    "ActionPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "title": "Action Id",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": true,
+          "title": "Inputs",
+          "type": "object"
+        },
+        "preconditions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Preconditions",
+          "type": "array"
+        },
+        "external_effects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "External Effects",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 90.0,
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "title": "Timeout Seconds",
+          "type": "number"
+        },
+        "retry": {
+          "$ref": "#/$defs/RetryPolicy"
+        },
+        "success_condition": {
+          "title": "Success Condition",
+          "type": "string"
+        },
+        "recovery_strategy": {
+          "title": "Recovery Strategy",
+          "type": "string"
+        },
+        "checkpoint_eligible": {
+          "default": true,
+          "title": "Checkpoint Eligible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action_id",
+        "type",
+        "success_condition",
+        "recovery_strategy"
+      ],
+      "title": "ActionPlan",
+      "type": "object"
+    },
+    "ConversationMode": {
+      "enum": [
+        "new",
+        "continue",
+        "imported"
+      ],
+      "title": "ConversationMode",
+      "type": "string"
+    },
+    "ExecutionPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "plan_version": {
+          "default": "1.0",
+          "title": "Plan Version",
+          "type": "string"
+        },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionPlan"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "required_capabilities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Capabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "actions"
+      ],
+      "title": "ExecutionPlan",
+      "type": "object"
+    },
+    "FailureClass": {
+      "enum": [
+        "transient",
+        "authentication",
+        "adapter_mismatch",
+        "protocol_error",
+        "environment",
+        "outcome_unknown",
+        "fatal"
+      ],
+      "title": "FailureClass",
+      "type": "string"
+    },
+    "RetryPolicy": {
+      "properties": {
+        "max_attempts": {
+          "default": 2,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Max Attempts",
+          "type": "integer"
+        },
+        "base_delay_seconds": {
+          "default": 0.5,
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Base Delay Seconds",
+          "type": "number"
+        }
+      },
+      "title": "RetryPolicy",
+      "type": "object"
+    },
+    "RunState": {
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "authentication_required",
+        "recoverable",
+        "cancelling",
+        "cancelled",
+        "failed",
+        "outcome_unknown"
+      ],
+      "title": "RunState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "protocol_id": {
+      "title": "Protocol Id",
+      "type": "string"
+    },
+    "protocol_version": {
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "protocol_hash": {
+      "title": "Protocol Hash",
+      "type": "string"
+    },
+    "input_values": {
+      "additionalProperties": true,
+      "title": "Input Values",
+      "type": "object"
+    },
+    "input_hash": {
+      "title": "Input Hash",
+      "type": "string"
+    },
+    "profile_id": {
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "provider": {
+      "title": "Provider",
+      "type": "string"
+    },
+    "conversation_mode": {
+      "$ref": "#/$defs/ConversationMode"
+    },
+    "conversation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Conversation Id"
+    },
+    "client_request_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Client Request Id"
+    },
+    "config_hash": {
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "config_snapshot": {
+      "additionalProperties": true,
+      "title": "Config Snapshot",
+      "type": "object"
+    },
+    "component_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Component Versions",
+      "type": "object"
+    },
+    "state": {
+      "$ref": "#/$defs/RunState"
+    },
+    "plan": {
+      "$ref": "#/$defs/ExecutionPlan"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "error_class": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "error_message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Message"
+    }
+  },
+  "required": [
+    "run_id",
+    "protocol_id",
+    "protocol_version",
+    "protocol_hash",
+    "input_values",
+    "input_hash",
+    "profile_id",
+    "provider",
+    "conversation_mode",
+    "config_hash",
+    "config_snapshot",
+    "component_versions",
+    "state",
+    "plan",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "RunRecord",
+  "type": "object"
+}

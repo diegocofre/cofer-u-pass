@@ -1,0 +1,58 @@
+# Changelog
+
+## 1.0.6 - 2026-07-27
+
+- Add `cofer-u-pass chat --profile PROFILE`, a clean interactive terminal façade over ordinary persisted runs.
+- Keep each user turn as an immutable run and continue through the persisted `conversation_id`; `/new` starts a fresh provider conversation without introducing a parallel execution engine.
+- Add `/id`, `/help`, `/new`, and `/exit` interactive commands.
+- Hide run/action/event JSON during chat and print only the canonical assistant Markdown plus actionable terminal-state failures.
+- Refactor CLI run waiting through a shared cleanup-aware helper so `run` and `chat` preserve the same executor cleanup barrier.
+- Add CLI regression coverage for conversation reuse and `/new`.
+
+## 1.0.5 - 2026-07-26
+
+- Fix canonical plain-text rendering so container fallback text is not concatenated with child text representing the same DOM content.
+- Preserve inline child order for paragraph plain-text rendering.
+- Add regression coverage based on the first successful live ChatGPT end-to-end run, where `COFER-U-PASS-OK` was previously emitted twice in `result.text`.
+
+## 1.0.4 - 2026-07-26
+
+- Centralize bounded authentication polling in the adapter contract via `wait_until_authenticated()`.
+- Fix run preflight false `authentication_required` results when a provider's authenticated shell mounts after `DOMContentLoaded`.
+- Make interactive authentication, status verification, run preflight, and conversation operations share the same authentication semantics.
+- Make the CLI wait for executor cleanup before leaving a terminal run state, preventing Playwright subprocess transports from being torn down with the asyncio loop on Windows/Python 3.13.
+- Add `cofer-u-pass --version`.
+- Add regression coverage for delayed run authentication, cleanup barriers, and the root version option.
+
+## 1.0.3 - 2026-07-26
+
+- Fixed a live ChatGPT verification race: `profiles status --verify` now waits for the authenticated application shell to mount instead of performing a single immediate check after `DOMContentLoaded`.
+- Preserves the v1.0.2 visible verification policy for ChatGPT, Gemini, and DeepSeek.
+- Added regression coverage for delayed authenticated UI mounting.
+
+## 1.0.2 - 2026-07-26
+
+- Fix `profiles status --verify` false negatives for providers whose authenticated UI is not reliable in Playwright headless mode.
+- Add explicit adapter manifest flags for headless execution and headless authentication verification.
+- Keep ChatGPT, Gemini, and DeepSeek visible-only until supervised headless compatibility is demonstrated; the controlled `generic` adapter remains headless-capable.
+- Fix Windows profile-lock contention so an occupied mandatory byte lock is reported as a busy profile instead of raising `PermissionError` while reading the lock file.
+- Add regression coverage for verification-mode selection and Windows lock contention.
+
+## 1.0.1 - 2026-07-26
+
+- Fix ChatGPT manual authentication closing immediately when the anonymous composer is visible.
+- Add optional `unauthenticated` adapter rules so explicit login/signup UI overrides weak positive authentication signals.
+- Add regression tests for authenticated-state precedence.
+
+## 1.0.0 - 2026-07-26
+
+Initial public v1 implementation.
+
+- Shared async application service behind Python, CLI, and HTTP/SSE interfaces.
+- Versioned protocol, event, block, adapter-rule, run, and configuration schemas.
+- SQLite WAL persistence, immutable plans, actions, events, checkpoints, leases, backups, and conservative restart recovery.
+- Playwright-managed Chromium with persistent profiles and manual authentication.
+- Official `generic`, ChatGPT, Gemini, and DeepSeek adapters.
+- DOM-based response streaming and canonical block output.
+- File attachments, artifact hashing/storage, typed local hooks, Doctor, diagnostics, update workflow, and loopback bearer-authenticated API.
+- Windows/Linux operational runbook and deterministic/unit/contract/integration/smoke test layers.

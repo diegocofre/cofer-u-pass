@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "LocatorRule": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "default": "css",
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "exact": {
+          "default": false,
+          "title": "Exact",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "LocatorRule",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "provider": {
+      "title": "Provider",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "home_url": {
+      "title": "Home Url",
+      "type": "string"
+    },
+    "allowed_origins": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Origins",
+      "type": "array"
+    },
+    "auth_origins": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Auth Origins",
+      "type": "array"
+    },
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "authenticated": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Authenticated",
+      "type": "array"
+    },
+    "unauthenticated": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Unauthenticated",
+      "type": "array"
+    },
+    "message_input": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Message Input",
+      "type": "array"
+    },
+    "send_button": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Send Button",
+      "type": "array"
+    },
+    "user_message": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "User Message",
+      "type": "array"
+    },
+    "response": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Response",
+      "type": "array"
+    },
+    "generation_active": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Generation Active",
+      "type": "array"
+    },
+    "attachment_input": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Attachment Input",
+      "type": "array"
+    },
+    "attachment_button": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Attachment Button",
+      "type": "array"
+    },
+    "attachment_ready": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Attachment Ready",
+      "type": "array"
+    },
+    "artifact": {
+      "items": {
+        "$ref": "#/$defs/LocatorRule"
+      },
+      "title": "Artifact",
+      "type": "array"
+    }
+  },
+  "required": [
+    "provider",
+    "version",
+    "home_url",
+    "allowed_origins",
+    "capabilities",
+    "authenticated",
+    "message_input",
+    "response"
+  ],
+  "title": "AdapterRules",
+  "type": "object"
+}

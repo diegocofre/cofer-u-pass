@@ -1,0 +1,94 @@
+{
+  "$defs": {
+    "Block": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "document",
+            "paragraph",
+            "heading",
+            "text",
+            "code",
+            "list",
+            "list_item",
+            "blockquote",
+            "link",
+            "image",
+            "table",
+            "thematic_break",
+            "unknown"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "href": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Href"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "title": "Attrs",
+          "type": "object"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Block"
+          },
+          "title": "Children",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Block",
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/Block"
+}

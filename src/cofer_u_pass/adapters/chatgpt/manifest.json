@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "provider": "chatgpt",
+  "adapter_version": "1.0.2",
+  "engine_contract": "1.0",
+  "rule_version": "1.0.2",
+  "rule_schema_version": "1.0",
+  "capabilities": [
+    "conversation.new",
+    "conversation.continue",
+    "conversation.import",
+    "message.send",
+    "response.stream",
+    "attachment.upload",
+    "artifact.download"
+  ],
+  "allowed_origins": [
+    "https://chatgpt.com"
+  ],
+  "compatibility": {
+    "python": ">=3.11,<3.14",
+    "playwright": ">=1.50,<2",
+    "chromium": "playwright-managed"
+  },
+  "supports_headless_execution": false,
+  "supports_headless_authentication_check": false
+}

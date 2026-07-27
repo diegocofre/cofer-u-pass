@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Paquetes y artefactos de build
+build/
+dist/
+*.egg-info/
+*.egg
+eggs/
+.eggs/
+wheels/
+pip-wheel-metadata/
+
+# Tests, cobertura y herramientas de desarrollo
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+
+# Configuración local y secretos
+.env
+.env.*
+!.env.example
+*.local
+
+# Datos locales de Cofer U Pass
+profiles/
+artifacts/
+evidence/
+backups/
+logs/
+tmp/
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos temporales y del sistema
+*.tmp
+*.temp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores e IDEs
+.idea/
+.vscode/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

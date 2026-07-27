@@ -1,0 +1,2 @@
+[console_scripts]
+cofer-u-pass = cofer_u_pass.cli.app:main
