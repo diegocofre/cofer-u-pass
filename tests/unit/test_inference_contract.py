@@ -1,7 +1,8 @@
 import pytest
+from pydantic import ValidationError
 
 from cofer_u_pass.adapters.base import AdapterManifest, AdapterRules, ProviderAdapter
-from cofer_u_pass.domain.errors import AdapterMismatch
+from cofer_u_pass.domain.errors import AdapterMismatch, ProtocolError
 from cofer_u_pass.domain.models import (
     InferenceSelection,
     InferenceState,
@@ -35,11 +36,14 @@ def _adapter() -> ProviderAdapter:
 
 def test_provider_model_normalizes_and_deduplicates_efforts():
     model = ProviderModel(
-        id="gpt-test",
-        provider="test",
-        display_name="GPT Test",
+        id=" gpt-test ",
+        provider=" Test ",
+        display_name=" GPT Test ",
         supported_efforts=["High", "high", " XHIGH "],
     )
+    assert model.id == "gpt-test"
+    assert model.provider == "test"
+    assert model.display_name == "GPT Test"
     assert model.supported_efforts == ["high", "xhigh"]
 
 
@@ -47,6 +51,13 @@ def test_inference_selection_normalizes_effort():
     selection = InferenceSelection(model="  gpt-test  ", effort=" High ")
     assert selection.model == "gpt-test"
     assert selection.effort == "high"
+
+
+def test_inference_selection_rejects_blank_values_after_trim():
+    with pytest.raises(ValidationError):
+        InferenceSelection(model="   ", effort="high")
+    with pytest.raises(ValidationError):
+        InferenceSelection(model="gpt-test", effort="   ")
 
 
 def test_verified_inference_evidence_fails_closed_on_mismatch():
@@ -82,7 +93,7 @@ def test_configure_inference_is_a_first_class_plan_operation():
         required_capabilities=["inference.model.select", "inference.effort.select"],
         operations=[
             ProtocolOperation(type="open_conversation"),
-            ProtocolOperation(type="configure_inference", params={"model": "gpt-test", "effort": "high"}),
+            ProtocolOperation(type="configure_inference", params={"model": "gpt-test", "effort": "High"}),
             ProtocolOperation(type="send_message", params={"text": "hello"}),
             ProtocolOperation(type="finalize"),
         ],
@@ -96,3 +107,17 @@ def test_configure_inference_is_a_first_class_plan_operation():
     ]
     assert plan.actions[1].external_effects == []
     assert plan.actions[1].inputs == {"model": "gpt-test", "effort": "high"}
+
+
+def test_invalid_configure_inference_is_a_protocol_error():
+    protocol = ProtocolDefinition(
+        protocol_id="bad-inference-test",
+        version="1.0.0",
+        operations=[
+            ProtocolOperation(type="open_conversation"),
+            ProtocolOperation(type="configure_inference", params={"model": "   ", "effort": "high"}),
+            ProtocolOperation(type="send_message", params={"text": "hello"}),
+        ],
+    )
+    with pytest.raises(ProtocolError, match="configure_inference"):
+        build_plan(protocol, {}, 30)
