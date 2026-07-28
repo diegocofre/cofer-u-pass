@@ -36,6 +36,18 @@ class ModelCatalogStore:
             raise ValueError("invalid profile id for model catalog")
         return self.root / f"{profile_id}.json"
 
+    @staticmethod
+    def _validate_snapshot(snapshot: ModelCatalogSnapshot) -> None:
+        seen: set[str] = set()
+        for model in snapshot.models:
+            if model.provider != snapshot.provider:
+                raise ValueError(
+                    f"model {model.id!r} provider {model.provider!r} does not match catalog provider {snapshot.provider!r}"
+                )
+            if model.id in seen:
+                raise ValueError(f"duplicate model id in profile catalog: {model.id}")
+            seen.add(model.id)
+
     def load(self, profile_id: str) -> ModelCatalogSnapshot | None:
         path = self._path(profile_id)
         if not path.exists():
@@ -45,6 +57,7 @@ class ModelCatalogStore:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             snapshot = ModelCatalogSnapshot.model_validate(raw)
+            self._validate_snapshot(snapshot)
         except Exception as exc:
             raise RuntimeError(f"invalid model catalog for {profile_id}: {exc}") from exc
         if snapshot.profile_id != profile_id:
@@ -52,7 +65,10 @@ class ModelCatalogStore:
         return snapshot
 
     def _write(self, snapshot: ModelCatalogSnapshot) -> ModelCatalogSnapshot:
+        self._validate_snapshot(snapshot)
         path = self._path(snapshot.profile_id)
+        if path.is_symlink():
+            raise RuntimeError("model catalog file must not be a symlink")
         tmp = path.with_suffix(".json.tmp")
         tmp.write_text(snapshot.model_dump_json(indent=2), encoding="utf-8")
         restrict_private_path(tmp, directory=False)
