@@ -50,7 +50,10 @@ class BridgeWorker:
 
     async def _profile_registration(self, profile_id: str) -> dict[str, Any]:
         profile = await self.service.profile_status(profile_id, verify=False)
-        caps = await self.provider.model_capabilities(profile_id)
+        # Profile registration describes the authenticated route itself. Do not
+        # resolve capabilities through a public model id because a real model
+        # may legitimately share the same string as a legacy profile alias.
+        caps = self.provider._capability_payload(profile.provider, None)
         snapshot = await self.provider.profile_catalog(profile_id)
         models: list[dict[str, Any]] = []
         catalog_updated_at: str | None = None
@@ -71,7 +74,7 @@ class BridgeWorker:
             "profile_id": profile_id,
             "provider": profile.provider,
             "status": profile.status,
-            "capabilities": caps["capabilities"],
+            "capabilities": caps,
             "models": models,
             "catalog_updated_at": catalog_updated_at,
             "catalog_error": catalog_error,
@@ -116,6 +119,7 @@ class BridgeWorker:
             path = Path(path_value)
             if not path.is_file():
                 continue
+
             async def content_stream():
                 with path.open("rb") as handle:
                     while True:
@@ -123,6 +127,7 @@ class BridgeWorker:
                         if not chunk:
                             break
                         yield chunk
+
             response = await client.post(
                 f"{self.bridge_url}/internal/v1/jobs/{job_id}/artifacts",
                 params={"filename": artifact.get("filename") or path.name},
