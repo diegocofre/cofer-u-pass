@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from playwright.async_api import Locator, Page
@@ -55,21 +56,38 @@ _MODEL_TESTID_EXCLUSIONS = (
 _EFFORT_ALIASES = {
     "none": "none",
     "off": "none",
+    "disabled": "none",
+    "desactivado": "none",
     "minimal": "minimal",
     "low": "low",
     "light": "low",
+    "bajo": "low",
+    "ligero": "low",
     "medium": "medium",
     "standard": "medium",
     "balanced": "medium",
+    "medio": "medium",
+    "estandar": "medium",
     "high": "high",
     "advanced": "high",
     "extended": "high",
+    "alto": "high",
+    "alta": "high",
+    "ampliado": "high",
+    "extendido": "high",
     "extra high": "xhigh",
-    "extra-high": "xhigh",
     "xhigh": "xhigh",
-    "maximum": "xhigh",
-    "max": "xhigh",
+    "heavy": "xhigh",
     "extreme": "xhigh",
+    "extra alto": "xhigh",
+    "extra alta": "xhigh",
+    "muy alto": "xhigh",
+    "muy alta": "xhigh",
+    "intenso": "xhigh",
+    "pesado": "xhigh",
+    "maximum": "max",
+    "max": "max",
+    "maximo": "max",
 }
 
 
@@ -120,8 +138,19 @@ def _model_choice(label: str | None, native_id: str | None = None) -> tuple[str,
 
 def _normalize_effort(label: str | None) -> str | None:
     value = _headline(label).lower()
-    value = re.sub(r"^[^:]+:\s*", "", value)
+    if not value:
+        return None
+    value = "".join(
+        char for char in unicodedata.normalize("NFKD", value)
+        if not unicodedata.combining(char)
+    )
+    value = value.replace("_", " ").replace("-", " ")
     value = re.sub(r"\s+", " ", value).strip()
+    value = re.sub(
+        r"^(?:intelligence|reasoning(?: effort)?|thinking|effort|inteligencia|razonamiento)\s*[: ]\s*",
+        "",
+        value,
+    )
     return _EFFORT_ALIASES.get(value)
 
 
@@ -216,7 +245,8 @@ class ChatGPTAdapter(ProviderAdapter):
             if not await candidate.is_visible():
                 continue
             label = await _locator_label(candidate)
-            if _normalize_effort(label) is not None:
+            native_id = await candidate.get_attribute("data-testid")
+            if _normalize_effort(label) is not None or _normalize_effort(native_id) is not None:
                 return candidate
         return None
 
@@ -270,7 +300,8 @@ class ChatGPTAdapter(ProviderAdapter):
             if not await item.is_visible():
                 continue
             label = await _locator_label(item)
-            effort = _normalize_effort(label)
+            native_id = await item.get_attribute("data-testid")
+            effort = _normalize_effort(label) or _normalize_effort(native_id)
             if effort is None or effort in seen:
                 continue
             seen.add(effort)
@@ -278,8 +309,8 @@ class ChatGPTAdapter(ProviderAdapter):
                 _Choice(
                     locator=item,
                     id=effort,
-                    label=_headline(label),
-                    native_id=await item.get_attribute("data-testid"),
+                    label=_headline(label) or native_id or effort,
+                    native_id=native_id,
                     selected=await _is_selected(item),
                 )
             )
@@ -340,7 +371,9 @@ class ChatGPTAdapter(ProviderAdapter):
         effort_picker = await self._effort_picker(page)
         if effort_picker is not None:
             native_effort = await _locator_label(effort_picker)
-            effort = _normalize_effort(native_effort)
+            effort = _normalize_effort(native_effort) or _normalize_effort(
+                await effort_picker.get_attribute("data-testid")
+            )
             if effort is None:
                 selected_effort = await self._selected_effort_from_menu(page)
                 if selected_effort is not None:
