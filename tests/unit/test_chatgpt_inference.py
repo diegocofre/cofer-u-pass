@@ -17,6 +17,21 @@ def test_chatgpt_model_labels_become_deterministic_public_ids(label, expected_id
     assert _model_choice(label) == (expected_id, expected_display)
 
 
+def test_chatgpt_unknown_model_family_can_use_stable_native_picker_id():
+    assert _model_choice("Orion Preview", "model-switcher-orion-preview") == (
+        "orion-preview",
+        "Orion Preview",
+    )
+
+
+def test_chatgpt_picker_controls_are_not_mistaken_for_models():
+    assert _model_choice("GPT-5.6 Sol", "model-switcher-dropdown-button") == (
+        "gpt-5.6-sol",
+        "GPT-5.6 Sol",
+    )
+    assert _model_choice("Configure", "model-switcher-configure") is None
+
+
 @pytest.mark.parametrize(
     ("label", "expected"),
     [
