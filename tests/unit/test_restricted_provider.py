@@ -48,6 +48,15 @@ def test_provider_parses_reasoning_effort(provider):
     assert compiled.effort == "high"
 
 
+def test_provider_rejects_unknown_public_reasoning_effort(provider):
+    with pytest.raises(ProtocolError, match="unsupported reasoning.effort"):
+        provider.compile_request({
+            "model": "gpt-5.6-sol",
+            "reasoning": {"effort": "extreme"},
+            "input": "hello",
+        })
+
+
 def test_provider_rejects_reasoning_fields_it_cannot_honor(provider):
     with pytest.raises(ProtocolError, match="unsupported reasoning fields"):
         provider.compile_request({
@@ -149,7 +158,7 @@ async def test_discovered_model_catalog_is_advertised_and_resolved_to_profile(co
 
         models = await provider.list_models()
         assert [item["id"] for item in models] == ["gpt-5.6-sol"]
-        assert models[0]["metadata"]["reasoning_efforts"] == ["high", "medium", "xhigh"]
+        assert models[0]["metadata"]["reasoning_efforts"] == ["medium", "high", "xhigh"]
         assert models[0]["metadata"]["routing_ambiguous"] is False
 
         route = await provider.resolve_model("gpt-5.6-sol", "high", allow_refresh=False)
