@@ -113,7 +113,9 @@ def _model_display(value: str | None) -> str | None:
     text = _headline(value)
     if not text:
         return None
-    # Prefer the visible model-looking fragment when aria labels include prose.
+    # This is a fallback for builds where menu rows have no stable native id.
+    # It intentionally recognizes known structural model-name families without
+    # constituting the provider model catalog.
     match = re.search(
         r"(?i)(gpt[- ]?\d[\w.+-]*(?:\s+(?:sol|pro|instant|thinking|codex))?|"
         r"o\d(?:[-.][\w.+-]+)*(?:\s+pro)?|"
@@ -125,14 +127,28 @@ def _model_display(value: str | None) -> str | None:
     return None
 
 
+def _native_model_id(native_id: str | None) -> str | None:
+    value = (native_id or "").strip().lower()
+    if not value.startswith("model-switcher-"):
+        return None
+    if any(part in value for part in _MODEL_TESTID_EXCLUSIONS):
+        return None
+    suffix = value.removeprefix("model-switcher-")
+    return _slug(suffix) or None
+
+
 def _model_choice(label: str | None, native_id: str | None = None) -> tuple[str, str] | None:
-    del native_id  # retained in the signature so callers can preserve provider evidence separately.
+    # Preserve human-friendly ids for recognizable labels, but never require a
+    # known family: a stable native model-switcher id is the generic fallback.
     display = _model_display(label)
-    if display is None:
+    if display is not None:
+        public_id = _slug(display)
+        if public_id:
+            return public_id, display
+    public_id = _native_model_id(native_id)
+    if public_id is None:
         return None
-    public_id = _slug(display)
-    if not public_id:
-        return None
+    display = _headline(label) or public_id
     return public_id, display
 
 
@@ -221,15 +237,13 @@ class ChatGPTAdapter(ProviderAdapter):
         picker = await self._first_visible(page, _MODEL_PICKER_SELECTORS)
         if picker is not None:
             return picker
-        # Last-resort structural fallback: a visible popup button whose label
-        # itself contains the currently selected model.
         buttons = page.locator("button[aria-haspopup]")
         for index in range(await buttons.count()):
             candidate = buttons.nth(index)
             if not await candidate.is_visible():
                 continue
             label = await _locator_label(candidate)
-            if _model_choice(label) is not None:
+            if _model_choice(label, await candidate.get_attribute("data-testid")) is not None:
                 return candidate
         raise AdapterMismatch("ChatGPT model picker could not be located")
 
@@ -237,8 +251,6 @@ class ChatGPTAdapter(ProviderAdapter):
         picker = await self._first_visible(page, _EFFORT_PICKER_SELECTORS)
         if picker is not None:
             return picker
-        # Some ChatGPT builds expose the current intelligence value as the
-        # button text without a dedicated test id.
         buttons = page.locator("button[aria-haspopup]")
         for index in range(await buttons.count()):
             candidate = buttons.nth(index)
@@ -272,15 +284,13 @@ class ChatGPTAdapter(ProviderAdapter):
             if public_id in seen:
                 continue
             seen.add(public_id)
-            choices.append(
-                _Choice(
-                    locator=item,
-                    id=public_id,
-                    label=display,
-                    native_id=native_id,
-                    selected=await _is_selected(item),
-                )
-            )
+            choices.append(_Choice(
+                locator=item,
+                id=public_id,
+                label=display,
+                native_id=native_id,
+                selected=await _is_selected(item),
+            ))
         if not choices:
             await _close_popup(page)
             raise AdapterMismatch("ChatGPT model picker opened but no model choices could be recognized")
@@ -305,15 +315,13 @@ class ChatGPTAdapter(ProviderAdapter):
             if effort is None or effort in seen:
                 continue
             seen.add(effort)
-            choices.append(
-                _Choice(
-                    locator=item,
-                    id=effort,
-                    label=_headline(label) or native_id or effort,
-                    native_id=native_id,
-                    selected=await _is_selected(item),
-                )
-            )
+            choices.append(_Choice(
+                locator=item,
+                id=effort,
+                label=_headline(label) or native_id or effort,
+                native_id=native_id,
+                selected=await _is_selected(item),
+            ))
         return choices
 
     async def _select_model(self, page: Page, model_id: str) -> _Choice:
@@ -408,8 +416,6 @@ class ChatGPTAdapter(ProviderAdapter):
         choices = await self._model_options(page)
         discovered: list[ProviderModel] = []
         try:
-            # The picker is open after _model_options(). Selecting by freshly
-            # collected locator avoids reopening it for the first candidate.
             for index, choice in enumerate(choices):
                 if index == 0:
                     await choice.locator.click()
@@ -417,19 +423,15 @@ class ChatGPTAdapter(ProviderAdapter):
                 else:
                     await self._select_model(page, choice.id)
                 efforts = [item.id for item in await self._effort_options(page)]
-                # Always dismiss a picker opened for discovery, including when
-                # its entries could not be normalized.
                 await _close_popup(page)
-                discovered.append(
-                    ProviderModel(
-                        id=choice.id,
-                        provider=self.provider,
-                        display_name=choice.label,
-                        supported_efforts=efforts,
-                        native_id=choice.native_id,
-                        native_label=choice.label,
-                    )
-                )
+                discovered.append(ProviderModel(
+                    id=choice.id,
+                    provider=self.provider,
+                    display_name=choice.label,
+                    supported_efforts=efforts,
+                    native_id=choice.native_id,
+                    native_label=choice.label,
+                ))
         finally:
             if original is not None:
                 try:
@@ -437,8 +439,7 @@ class ChatGPTAdapter(ProviderAdapter):
                     if original.effort is not None:
                         await self._select_effort(page, original.effort)
                 except Exception:
-                    # Discovery is non-destructive with respect to messages.
-                    # A later run still configures and verifies inference before
-                    # send, so restoration failure cannot cause silent fallback.
+                    # A later run always configures and verifies inference before
+                    # send; restoration failure cannot produce a silent fallback.
                     pass
         return discovered
