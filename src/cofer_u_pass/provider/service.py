@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from cofer_u_pass.application.service import ApplicationService
 from cofer_u_pass.browser.locks import ProfileLock, ProfileLockedError
@@ -13,15 +14,22 @@ from cofer_u_pass.domain.models import (
     ConversationMode,
     InferenceSelection,
     ProviderModel,
-    ResolvedInferenceTarget,
     ProtocolDefinition,
     ProtocolOperation,
+    ResolvedInferenceTarget,
     RunState,
 )
 from cofer_u_pass.exchange.models import ExchangeProtocol
 from cofer_u_pass.exchange.normalizer import NormalizedInputs, normalize_input_files, validate_output_bundle
 from cofer_u_pass.persistence.model_catalog import ModelCatalogSnapshot, ModelCatalogStore
 from cofer_u_pass.provider.files import ProviderFileStore
+
+_PUBLIC_REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+_EFFORT_ORDER = {value: index for index, value in enumerate(_PUBLIC_REASONING_EFFORTS)}
+
+
+def _ordered_efforts(values: Iterable[str]) -> list[str]:
+    return sorted(set(values), key=lambda value: (_EFFORT_ORDER.get(value, len(_EFFORT_ORDER)), value))
 
 
 @dataclass(slots=True)
@@ -68,7 +76,7 @@ class RestrictedProviderService:
 
         lock = ProfileLock(Path(profile.profile_dir))
         try:
-            await __import__("asyncio").to_thread(lock.acquire)
+            await asyncio.to_thread(lock.acquire)
         except ProfileLockedError as exc:
             raise EnvironmentFailure(f"profile is in use: {profile_id}") from exc
         browser = None
@@ -88,9 +96,11 @@ class RestrictedProviderService:
             self.catalog.save_error(profile_id, profile.provider, f"{type(exc).__name__}: {exc}")
             raise
         finally:
-            if browser:
-                await browser.close()
-            await __import__("asyncio").to_thread(lock.release)
+            try:
+                if browser:
+                    await browser.close()
+            finally:
+                await asyncio.to_thread(lock.release)
 
     async def _ready_catalog_candidates(self, model_id: str | None = None) -> list[_CatalogCandidate]:
         items: list[_CatalogCandidate] = []
@@ -189,7 +199,7 @@ class RestrictedProviderService:
             "streaming": "buffered",
             "tools": False,
             "function_calling": False,
-            "reasoning_efforts": list(model.supported_efforts) if model else [],
+            "reasoning_efforts": _ordered_efforts(model.supported_efforts) if model else [],
         }
 
     async def model_capabilities(self, model_id: str) -> dict[str, Any]:
@@ -229,7 +239,9 @@ class RestrictedProviderService:
             candidates = grouped[model_id]
             representative = candidates[0]
             providers = sorted({candidate.provider for candidate in candidates})
-            efforts = sorted({effort for candidate in candidates for effort in candidate.model.supported_efforts})
+            efforts = _ordered_efforts(
+                effort for candidate in candidates for effort in candidate.model.supported_efforts
+            )
             items.append({
                 "id": model_id,
                 "object": "model",
@@ -361,9 +373,14 @@ class RestrictedProviderService:
         if not isinstance(effort, str):
             raise ProtocolError("reasoning.effort must be a string")
         try:
-            return InferenceSelection(model="validation", effort=effort).effort
+            normalized = InferenceSelection(model="validation", effort=effort).effort
         except Exception as exc:
             raise ProtocolError(f"invalid reasoning.effort: {exc}") from exc
+        if normalized not in _PUBLIC_REASONING_EFFORTS:
+            raise ProtocolError(
+                f"unsupported reasoning.effort {normalized!r}; choose from {list(_PUBLIC_REASONING_EFFORTS)}"
+            )
+        return normalized
 
     def compile_request(self, body: dict[str, Any], *, resolved_files: dict[str, Path] | None = None) -> CompiledRequest:
         if not isinstance(body, dict):
