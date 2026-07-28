@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import re
 from dataclasses import dataclass
-from typing import Any
 
 from playwright.async_api import Locator, Page
 
@@ -18,6 +17,7 @@ class _Choice:
     id: str
     label: str
     native_id: str | None = None
+    selected: bool = False
 
 
 _MODEL_PICKER_SELECTORS = (
@@ -108,6 +108,7 @@ def _model_display(value: str | None) -> str | None:
 
 
 def _model_choice(label: str | None, native_id: str | None = None) -> tuple[str, str] | None:
+    del native_id  # retained in the signature so callers can preserve provider evidence separately.
     display = _model_display(label)
     if display is None:
         return None
@@ -143,6 +144,25 @@ async def _locator_label(locator: Locator) -> str:
         if value:
             return value
     return ""
+
+
+async def _is_selected(locator: Locator) -> bool:
+    for attr in ("aria-checked", "aria-selected", "data-state", "data-selected"):
+        try:
+            value = (await locator.get_attribute(attr) or "").strip().lower()
+        except Exception:
+            continue
+        if value in {"true", "checked", "selected", "on", "active"}:
+            return True
+    return False
+
+
+async def _close_popup(page: Page) -> None:
+    try:
+        await page.keyboard.press("Escape")
+        await asyncio.sleep(0.05)
+    except Exception:
+        pass
 
 
 class ChatGPTAdapter(ProviderAdapter):
@@ -222,8 +242,17 @@ class ChatGPTAdapter(ProviderAdapter):
             if public_id in seen:
                 continue
             seen.add(public_id)
-            choices.append(_Choice(locator=item, id=public_id, label=display, native_id=native_id))
+            choices.append(
+                _Choice(
+                    locator=item,
+                    id=public_id,
+                    label=display,
+                    native_id=native_id,
+                    selected=await _is_selected(item),
+                )
+            )
         if not choices:
+            await _close_popup(page)
             raise AdapterMismatch("ChatGPT model picker opened but no model choices could be recognized")
         return choices
 
@@ -251,6 +280,7 @@ class ChatGPTAdapter(ProviderAdapter):
                     id=effort,
                     label=_headline(label),
                     native_id=await item.get_attribute("data-testid"),
+                    selected=await _is_selected(item),
                 )
             )
         return choices
@@ -259,6 +289,7 @@ class ChatGPTAdapter(ProviderAdapter):
         choices = await self._model_options(page)
         match = next((choice for choice in choices if choice.id == model_id), None)
         if match is None:
+            await _close_popup(page)
             available = ", ".join(choice.id for choice in choices)
             raise AdapterMismatch(
                 f"ChatGPT model {model_id!r} is not selectable; available models: {available or '(none)'}"
@@ -271,6 +302,7 @@ class ChatGPTAdapter(ProviderAdapter):
         choices = await self._effort_options(page)
         match = next((choice for choice in choices if choice.id == effort), None)
         if match is None:
+            await _close_popup(page)
             available = ", ".join(choice.id for choice in choices)
             raise AdapterMismatch(
                 f"ChatGPT effort {effort!r} is not selectable; available efforts: {available or '(none)'}"
@@ -279,13 +311,29 @@ class ChatGPTAdapter(ProviderAdapter):
         await asyncio.sleep(0.1)
         return match
 
+    async def _selected_model_from_menu(self, page: Page) -> _Choice | None:
+        choices = await self._model_options(page)
+        selected = next((choice for choice in choices if choice.selected), None)
+        await _close_popup(page)
+        return selected
+
+    async def _selected_effort_from_menu(self, page: Page) -> _Choice | None:
+        choices = await self._effort_options(page)
+        selected = next((choice for choice in choices if choice.selected), None)
+        await _close_popup(page)
+        return selected
+
     async def read_inference_state(self, page: Page) -> InferenceState | None:
         picker = await self._model_picker(page)
         model_label = await _locator_label(picker)
         parsed = _model_choice(model_label, await picker.get_attribute("data-testid"))
         if parsed is None:
-            return None
-        model_id, native_model = parsed
+            selected_model = await self._selected_model_from_menu(page)
+            if selected_model is None:
+                return None
+            model_id, native_model = selected_model.id, selected_model.label
+        else:
+            model_id, native_model = parsed
 
         effort: str | None = None
         native_effort: str | None = None
@@ -293,6 +341,11 @@ class ChatGPTAdapter(ProviderAdapter):
         if effort_picker is not None:
             native_effort = await _locator_label(effort_picker)
             effort = _normalize_effort(native_effort)
+            if effort is None:
+                selected_effort = await self._selected_effort_from_menu(page)
+                if selected_effort is not None:
+                    effort = selected_effort.id
+                    native_effort = selected_effort.label
 
         return InferenceState(
             model=model_id,
@@ -331,12 +384,9 @@ class ChatGPTAdapter(ProviderAdapter):
                 else:
                     await self._select_model(page, choice.id)
                 efforts = [item.id for item in await self._effort_options(page)]
-                # Close the effort menu without relying on locale-specific text.
-                if efforts:
-                    try:
-                        await page.keyboard.press("Escape")
-                    except Exception:
-                        pass
+                # Always dismiss a picker opened for discovery, including when
+                # its entries could not be normalized.
+                await _close_popup(page)
                 discovered.append(
                     ProviderModel(
                         id=choice.id,
@@ -354,7 +404,8 @@ class ChatGPTAdapter(ProviderAdapter):
                     if original.effort is not None:
                         await self._select_effort(page, original.effort)
                 except Exception:
-                    # Discovery never pretends restoration succeeded.  The
-                    # caller will re-read/verify state before a later send.
+                    # Discovery is non-destructive with respect to messages.
+                    # A later run still configures and verifies inference before
+                    # send, so restoration failure cannot cause silent fallback.
                     pass
         return discovered
