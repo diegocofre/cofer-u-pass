@@ -19,6 +19,7 @@ class ModelCatalogSnapshot(BaseModel):
     profile_id: str
     provider: str
     models: list[ProviderModel] = Field(default_factory=list)
+    error: str | None = None
     updated_at: datetime
 
 
@@ -50,20 +51,32 @@ class ModelCatalogStore:
             raise RuntimeError("model catalog profile id mismatch")
         return snapshot
 
-    def save(self, profile_id: str, provider: str, models: list[ProviderModel]) -> ModelCatalogSnapshot:
-        path = self._path(profile_id)
-        snapshot = ModelCatalogSnapshot(
-            profile_id=profile_id,
-            provider=provider,
-            models=models,
-            updated_at=datetime.now(timezone.utc),
-        )
+    def _write(self, snapshot: ModelCatalogSnapshot) -> ModelCatalogSnapshot:
+        path = self._path(snapshot.profile_id)
         tmp = path.with_suffix(".json.tmp")
         tmp.write_text(snapshot.model_dump_json(indent=2), encoding="utf-8")
         restrict_private_path(tmp, directory=False)
         tmp.replace(path)
         restrict_private_path(path, directory=False)
         return snapshot
+
+    def save(self, profile_id: str, provider: str, models: list[ProviderModel]) -> ModelCatalogSnapshot:
+        return self._write(ModelCatalogSnapshot(
+            profile_id=profile_id,
+            provider=provider,
+            models=models,
+            error=None,
+            updated_at=datetime.now(timezone.utc),
+        ))
+
+    def save_error(self, profile_id: str, provider: str, error: str) -> ModelCatalogSnapshot:
+        return self._write(ModelCatalogSnapshot(
+            profile_id=profile_id,
+            provider=provider,
+            models=[],
+            error=error,
+            updated_at=datetime.now(timezone.utc),
+        ))
 
     def clear(self, profile_id: str) -> None:
         path = self._path(profile_id)
