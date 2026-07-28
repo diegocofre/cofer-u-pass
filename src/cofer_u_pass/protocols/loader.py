@@ -11,7 +11,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from cofer_u_pass.domain.errors import ProtocolError
-from cofer_u_pass.domain.models import ActionPlan, ExecutionPlan, ProtocolDefinition, RetryPolicy
+from cofer_u_pass.domain.models import ActionPlan, ExecutionPlan, InferenceSelection, ProtocolDefinition, RetryPolicy
 
 INPUT_REF = re.compile(r"^\$\{input\.([A-Za-z0-9_.-]+)\}$")
 
@@ -93,6 +93,11 @@ def build_plan(protocol: ProtocolDefinition, inputs: dict[str, Any], default_tim
     for index, op in enumerate(protocol.operations, start=1):
         defaults = _OPERATION_DEFAULTS[op.type]
         params = resolve_input_refs(op.params, inputs)
+        if op.type == "configure_inference":
+            try:
+                params = InferenceSelection.model_validate(params).model_dump(mode="json")
+            except Exception as exc:
+                raise ProtocolError(f"invalid configure_inference params: {exc}") from exc
         actions.append(ActionPlan(
             action_id=f"a{index:04d}-{op.type}",
             type=op.type,
