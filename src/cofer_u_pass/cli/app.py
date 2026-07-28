@@ -408,7 +408,22 @@ def profile_create(name: str, provider: str = typer.Option(..., "--provider"), j
 def profile_authenticate(name: str, timeout: float = typer.Option(900, help="Seconds to wait for manual login recognition."), json_output: bool = typer.Option(False, "--json")):
     typer.echo("A visible managed Chromium window will open. Complete login/MFA/CAPTCHA manually; Cofer U Pass only recognizes the authenticated state.")
     async def work():
-        s = ApplicationService(load_config()); await s.start(execute_queued=False); return await s.authenticate_profile(name, timeout_seconds=timeout)
+        from cofer_u_pass.provider.service import RestrictedProviderService
+
+        s = ApplicationService(load_config())
+        await s.start(execute_queued=False)
+        profile = await s.authenticate_profile(name, timeout_seconds=timeout)
+        adapter = s.registry.create(profile.provider)
+        if "inference.model.discover" in adapter.capabilities:
+            provider = RestrictedProviderService(s)
+            try:
+                await provider.refresh_profile_catalog(name)
+            except Exception:
+                # Authentication is authoritative and must remain successful even
+                # if a provider UI change prevents catalog discovery. The failed
+                # refresh is persisted and can be inspected/retried explicitly.
+                pass
+        return profile
     emit(arun(work()), json_output)
 
 
@@ -424,6 +439,37 @@ def profile_list(json_output: bool = typer.Option(False, "--json")):
     async def work():
         s = ApplicationService(load_config()); await s.start(execute_queued=False); return await s.list_profiles()
     emit([p.model_dump(mode="json") for p in arun(work())], json_output)
+
+
+@profiles_app.command("models")
+def profile_models(
+    name: str,
+    refresh: bool = typer.Option(False, "--refresh", help="Rediscover models from the authenticated provider web UI."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Inspect or explicitly refresh the derived model catalog for one profile."""
+    if refresh:
+        typer.echo("Refreshing the provider model catalog may open a managed Chromium window.")
+
+    async def work():
+        from cofer_u_pass.provider.service import RestrictedProviderService
+
+        s = ApplicationService(load_config())
+        await s.start(execute_queued=False)
+        provider = RestrictedProviderService(s)
+        snapshot = await provider.refresh_profile_catalog(name) if refresh else await provider.profile_catalog(name)
+        if snapshot is None:
+            profile = await s.profile_status(name, verify=False)
+            return {
+                "profile_id": profile.profile_id,
+                "provider": profile.provider,
+                "models": [],
+                "error": "model catalog has not been discovered; run with --refresh",
+                "updated_at": None,
+            }
+        return snapshot.model_dump(mode="json")
+
+    emit(arun(work()), json_output)
 
 
 @config_app.command("paths")
