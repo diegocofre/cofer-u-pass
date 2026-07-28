@@ -49,7 +49,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         finally:
             await service.shutdown(cooperative=True)
 
-    app = FastAPI(title="Cofer U Pass", version="1.1.0", lifespan=lifespan)
+    app = FastAPI(title="Cofer U Pass", version="1.2.0", lifespan=lifespan)
     app.state.service = service
     if cfg.api.cors_origins:
         app.add_middleware(
@@ -74,7 +74,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if not secrets.compare_digest(supplied, expected_token()):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
 
-
     # -----------------------------------------------------------------------
     # Restricted OpenAI-compatible provider surface. These endpoints expose
     # text/file exchange only; tool/function calling is deliberately rejected.
@@ -82,7 +81,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     @app.get("/v1/models")
     async def provider_models(_: None = Depends(auth)):
-        return {"object": "list", "data": await provider.list_models()}
+        try:
+            return {"object": "list", "data": await provider.list_models()}
+        except ProtocolError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.get("/v1/models/{model_id}/capabilities")
     async def provider_capabilities(model_id: str, _: None = Depends(auth)):
@@ -90,6 +92,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             return await provider.model_capabilities(model_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="model/profile not found") from exc
+        except ProtocolError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.post("/v1/files")
     async def provider_upload_file(
