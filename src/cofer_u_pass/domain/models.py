@@ -51,6 +51,72 @@ class ConversationMode(StrEnum):
     IMPORTED = "imported"
 
 
+class ProviderModel(BaseModel):
+    """Provider-neutral model advertised by an authenticated web profile."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=160)
+    provider: str = Field(min_length=1, max_length=80)
+    display_name: str = Field(min_length=1, max_length=200)
+    supported_efforts: list[str] = Field(default_factory=list)
+    native_id: str | None = None
+    native_label: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("supported_efforts")
+    @classmethod
+    def normalize_efforts(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for raw in values:
+            value = str(raw).strip().lower()
+            if not value:
+                raise ValueError("supported effort values must be non-empty")
+            if value not in normalized:
+                normalized.append(value)
+        return normalized
+
+
+class InferenceSelection(BaseModel):
+    """Public inference request after provider/profile routing is resolved."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = Field(min_length=1, max_length=160)
+    effort: str | None = Field(default=None, min_length=1, max_length=80)
+
+    @field_validator("model")
+    @classmethod
+    def normalize_model(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("effort")
+    @classmethod
+    def normalize_effort(cls, value: str | None) -> str | None:
+        return value.strip().lower() if value is not None else None
+
+
+class InferenceState(BaseModel):
+    """Verified provider inference state expressed in public and native terms."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = Field(min_length=1, max_length=160)
+    effort: str | None = None
+    native_model: str | None = None
+    native_effort: str | None = None
+    verified: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResolvedInferenceTarget(BaseModel):
+    """Internal route from a public model request to an authenticated profile."""
+
+    model_config = ConfigDict(extra="forbid")
+    provider: str
+    profile_id: str
+    selection: InferenceSelection
+    model: ProviderModel | None = None
+    legacy_profile_alias: bool = False
+
+
 class Block(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal[
@@ -189,7 +255,7 @@ class Checkpoint(BaseModel):
 class ProtocolOperation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal[
-        "open_conversation", "attach_files", "send_message", "capture_response",
+        "open_conversation", "configure_inference", "attach_files", "send_message", "capture_response",
         "download_artifacts", "hook", "checkpoint", "finalize"
     ]
     params: dict[str, Any] = Field(default_factory=dict)
