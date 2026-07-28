@@ -125,6 +125,38 @@ class RestrictedProviderService:
                 candidates.append(profile.profile_id)
         return candidates[0] if len(candidates) == 1 else None
 
+    async def _resolved_catalog_candidate(
+        self,
+        model_id: str,
+        effort: str | None,
+        candidates: list[_CatalogCandidate],
+        *,
+        allow_refresh: bool,
+    ) -> ResolvedInferenceTarget:
+        if len(candidates) != 1:
+            profiles = sorted(candidate.profile_id for candidate in candidates)
+            raise ProtocolError(
+                f"model {model_id!r} is ambiguous across ready profiles: {profiles}; "
+                "configure a single route before using this model"
+            )
+        candidate = candidates[0]
+        selection = InferenceSelection(model=model_id, effort=effort)
+        if effort is not None and effort not in candidate.model.supported_efforts:
+            if allow_refresh:
+                await self.refresh_profile_catalog(candidate.profile_id)
+                return await self.resolve_model(model_id, effort, allow_refresh=False)
+            raise ProtocolError(
+                f"model {model_id!r} does not advertise reasoning effort {effort!r}; "
+                f"supported: {candidate.model.supported_efforts}"
+            )
+        return ResolvedInferenceTarget(
+            provider=candidate.provider,
+            profile_id=candidate.profile_id,
+            selection=selection,
+            model=candidate.model,
+            legacy_profile_alias=False,
+        )
+
     async def resolve_model(
         self,
         model_id: str,
@@ -132,6 +164,14 @@ class RestrictedProviderService:
         *,
         allow_refresh: bool = True,
     ) -> ResolvedInferenceTarget:
+        # Real discovered models take precedence over the temporary v1.1
+        # profile-id alias if their identifiers ever collide.
+        candidates = await self._ready_catalog_candidates(model_id)
+        if candidates:
+            return await self._resolved_catalog_candidate(
+                model_id, effort, candidates, allow_refresh=allow_refresh
+            )
+
         # v1.1 compatibility: a profile id remains accepted when no new inference
         # controls are requested, but it is no longer advertised as a model.
         legacy = await self.service.db.get_profile(model_id)
@@ -151,39 +191,13 @@ class RestrictedProviderService:
                 legacy_profile_alias=True,
             )
 
-        candidates = await self._ready_catalog_candidates(model_id)
-        if not candidates and allow_refresh:
+        if allow_refresh:
             refresh_profile = await self._single_refresh_candidate()
             if refresh_profile is not None:
                 await self.refresh_profile_catalog(refresh_profile)
                 return await self.resolve_model(model_id, effort, allow_refresh=False)
-        if not candidates:
-            raise ProtocolError(
-                f"unknown model {model_id!r}; refresh an authenticated profile model catalog first"
-            )
-        if len(candidates) != 1:
-            profiles = sorted(candidate.profile_id for candidate in candidates)
-            raise ProtocolError(
-                f"model {model_id!r} is ambiguous across ready profiles: {profiles}; "
-                "configure a single route before using this model"
-            )
-
-        candidate = candidates[0]
-        selection = InferenceSelection(model=model_id, effort=effort)
-        if effort is not None and effort not in candidate.model.supported_efforts:
-            if allow_refresh:
-                await self.refresh_profile_catalog(candidate.profile_id)
-                return await self.resolve_model(model_id, effort, allow_refresh=False)
-            raise ProtocolError(
-                f"model {model_id!r} does not advertise reasoning effort {effort!r}; "
-                f"supported: {candidate.model.supported_efforts}"
-            )
-        return ResolvedInferenceTarget(
-            provider=candidate.provider,
-            profile_id=candidate.profile_id,
-            selection=selection,
-            model=candidate.model,
-            legacy_profile_alias=False,
+        raise ProtocolError(
+            f"unknown model {model_id!r}; refresh an authenticated profile model catalog first"
         )
 
     def _capability_payload(self, provider: str, model: ProviderModel | None) -> dict[str, Any]:
