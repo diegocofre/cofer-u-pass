@@ -7,21 +7,39 @@ from pathlib import Path
 from typing import Any
 
 from cofer_u_pass.application.service import ApplicationService
-from cofer_u_pass.domain.errors import ProtocolError
-from cofer_u_pass.domain.models import ConversationMode, ProtocolDefinition, ProtocolOperation, RunState
+from cofer_u_pass.browser.locks import ProfileLock, ProfileLockedError
+from cofer_u_pass.domain.errors import EnvironmentFailure, ProtocolError
+from cofer_u_pass.domain.models import (
+    ConversationMode,
+    InferenceSelection,
+    ProviderModel,
+    ResolvedInferenceTarget,
+    ProtocolDefinition,
+    ProtocolOperation,
+    RunState,
+)
 from cofer_u_pass.exchange.models import ExchangeProtocol
 from cofer_u_pass.exchange.normalizer import NormalizedInputs, normalize_input_files, validate_output_bundle
+from cofer_u_pass.persistence.model_catalog import ModelCatalogSnapshot, ModelCatalogStore
 from cofer_u_pass.provider.files import ProviderFileStore
 
 
 @dataclass(slots=True)
 class CompiledRequest:
     model: str
+    effort: str | None
     prompt: str
     input_paths: list[Path]
     protocol: ExchangeProtocol
     stream: bool
     client_request_id: str | None
+
+
+@dataclass(slots=True)
+class _CatalogCandidate:
+    profile_id: str
+    provider: str
+    model: ProviderModel
 
 
 class RestrictedProviderService:
@@ -34,39 +52,197 @@ class RestrictedProviderService:
     def __init__(self, service: ApplicationService, files: ProviderFileStore | None = None):
         self.service = service
         self.files = files or ProviderFileStore(service.config)
+        self.catalog = ModelCatalogStore(service.config)
 
-    async def model_capabilities(self, profile_id: str) -> dict[str, Any]:
+    async def profile_catalog(self, profile_id: str) -> ModelCatalogSnapshot | None:
+        await self.service.profile_status(profile_id, verify=False)
+        return self.catalog.load(profile_id)
+
+    async def refresh_profile_catalog(self, profile_id: str) -> ModelCatalogSnapshot:
         profile = await self.service.profile_status(profile_id, verify=False)
+        if profile.status != "ready" or not profile.authenticated:
+            raise ProtocolError(f"profile {profile_id!r} is not ready/authenticated")
         adapter = self.service.registry.create(profile.provider)
+        if "inference.model.discover" not in adapter.capabilities:
+            raise ProtocolError(f"adapter {profile.provider} does not support model discovery")
+
+        lock = ProfileLock(Path(profile.profile_dir))
+        try:
+            await __import__("asyncio").to_thread(lock.acquire)
+        except ProfileLockedError as exc:
+            raise EnvironmentFailure(f"profile is in use: {profile_id}") from exc
+        browser = None
+        try:
+            browser = await self.service.runtime.launch_persistent(
+                Path(profile.profile_dir),
+                headless=adapter.supports_headless_execution,
+                allowed_origins=adapter.allowed_origins,
+            )
+            await adapter.navigate_home(browser.page)
+            await adapter.ensure_authenticated(browser.page)
+            models = await adapter.discover_models(browser.page)
+            if not models:
+                raise ProtocolError(f"adapter {profile.provider} discovered no selectable models")
+            return self.catalog.save(profile_id, profile.provider, models)
+        except Exception as exc:
+            self.catalog.save_error(profile_id, profile.provider, f"{type(exc).__name__}: {exc}")
+            raise
+        finally:
+            if browser:
+                await browser.close()
+            await __import__("asyncio").to_thread(lock.release)
+
+    async def _ready_catalog_candidates(self, model_id: str | None = None) -> list[_CatalogCandidate]:
+        items: list[_CatalogCandidate] = []
+        for profile in await self.service.list_profiles():
+            if profile.status != "ready" or not profile.authenticated:
+                continue
+            snapshot = self.catalog.load(profile.profile_id)
+            if snapshot is None or snapshot.error or snapshot.provider != profile.provider:
+                continue
+            for model in snapshot.models:
+                if model_id is None or model.id == model_id:
+                    items.append(_CatalogCandidate(profile.profile_id, profile.provider, model))
+        return items
+
+    async def _single_refresh_candidate(self) -> str | None:
+        candidates: list[str] = []
+        for profile in await self.service.list_profiles():
+            if profile.status != "ready" or not profile.authenticated:
+                continue
+            adapter = self.service.registry.create(profile.provider)
+            if "inference.model.discover" in adapter.capabilities:
+                candidates.append(profile.profile_id)
+        return candidates[0] if len(candidates) == 1 else None
+
+    async def resolve_model(
+        self,
+        model_id: str,
+        effort: str | None = None,
+        *,
+        allow_refresh: bool = True,
+    ) -> ResolvedInferenceTarget:
+        # v1.1 compatibility: a profile id remains accepted when no new inference
+        # controls are requested, but it is no longer advertised as a model.
+        legacy = await self.service.db.get_profile(model_id)
+        if legacy is not None:
+            if legacy.status != "ready" or not legacy.authenticated:
+                raise ProtocolError(f"legacy profile model {model_id!r} is not ready/authenticated")
+            if effort is not None:
+                raise ProtocolError(
+                    "reasoning.effort is unavailable with the legacy profile-id model alias; "
+                    "refresh the catalog and use a real model id"
+                )
+            return ResolvedInferenceTarget(
+                provider=legacy.provider,
+                profile_id=legacy.profile_id,
+                selection=InferenceSelection(model=model_id),
+                model=None,
+                legacy_profile_alias=True,
+            )
+
+        candidates = await self._ready_catalog_candidates(model_id)
+        if not candidates and allow_refresh:
+            refresh_profile = await self._single_refresh_candidate()
+            if refresh_profile is not None:
+                await self.refresh_profile_catalog(refresh_profile)
+                return await self.resolve_model(model_id, effort, allow_refresh=False)
+        if not candidates:
+            raise ProtocolError(
+                f"unknown model {model_id!r}; refresh an authenticated profile model catalog first"
+            )
+        if len(candidates) != 1:
+            profiles = sorted(candidate.profile_id for candidate in candidates)
+            raise ProtocolError(
+                f"model {model_id!r} is ambiguous across ready profiles: {profiles}; "
+                "configure a single route before using this model"
+            )
+
+        candidate = candidates[0]
+        selection = InferenceSelection(model=model_id, effort=effort)
+        if effort is not None and effort not in candidate.model.supported_efforts:
+            if allow_refresh:
+                await self.refresh_profile_catalog(candidate.profile_id)
+                return await self.resolve_model(model_id, effort, allow_refresh=False)
+            raise ProtocolError(
+                f"model {model_id!r} does not advertise reasoning effort {effort!r}; "
+                f"supported: {candidate.model.supported_efforts}"
+            )
+        return ResolvedInferenceTarget(
+            provider=candidate.provider,
+            profile_id=candidate.profile_id,
+            selection=selection,
+            model=candidate.model,
+            legacy_profile_alias=False,
+        )
+
+    def _capability_payload(self, provider: str, model: ProviderModel | None) -> dict[str, Any]:
+        adapter = self.service.registry.create(provider)
         capabilities = adapter.capabilities
         return {
-            "model": profile_id,
-            "provider": profile.provider,
-            "profile_status": profile.status,
-            "capabilities": {
-                "text_input": True,
-                "text_output": True,
-                "file_input": "attachment.upload" in capabilities,
-                "file_output": "artifact.download" in capabilities,
-                "bundle_input": True,
-                "bundle_output": "artifact.download" in capabilities,
-                "streaming": "buffered",
-                "tools": False,
-                "function_calling": False,
-            },
+            "text_input": True,
+            "text_output": True,
+            "file_input": "attachment.upload" in capabilities,
+            "file_output": "artifact.download" in capabilities,
+            "bundle_input": True,
+            "bundle_output": "artifact.download" in capabilities,
+            "streaming": "buffered",
+            "tools": False,
+            "function_calling": False,
+            "reasoning_efforts": list(model.supported_efforts) if model else [],
+        }
+
+    async def model_capabilities(self, model_id: str) -> dict[str, Any]:
+        candidates = await self._ready_catalog_candidates(model_id)
+        if candidates:
+            providers = {candidate.provider for candidate in candidates}
+            model = candidates[0].model
+            if len(providers) != 1:
+                raise ProtocolError(f"model {model_id!r} has conflicting provider ownership")
+            provider = next(iter(providers))
+            return {
+                "model": model_id,
+                "provider": provider,
+                "capabilities": self._capability_payload(provider, model),
+                "exchange_protocol": "cofer-u-pass.exchange/1",
+            }
+
+        legacy = await self.service.db.get_profile(model_id)
+        if legacy is None:
+            raise KeyError(model_id)
+        return {
+            "model": model_id,
+            "provider": legacy.provider,
+            "profile_status": legacy.status,
+            "legacy_profile_alias": True,
+            "capabilities": self._capability_payload(legacy.provider, None),
             "exchange_protocol": "cofer-u-pass.exchange/1",
         }
 
     async def list_models(self) -> list[dict[str, Any]]:
-        items = []
-        for profile in await self.service.list_profiles():
-            caps = await self.model_capabilities(profile.profile_id)
+        grouped: dict[str, list[_CatalogCandidate]] = {}
+        for candidate in await self._ready_catalog_candidates():
+            grouped.setdefault(candidate.model.id, []).append(candidate)
+
+        items: list[dict[str, Any]] = []
+        for model_id in sorted(grouped):
+            candidates = grouped[model_id]
+            representative = candidates[0]
+            providers = sorted({candidate.provider for candidate in candidates})
+            efforts = sorted({effort for candidate in candidates for effort in candidate.model.supported_efforts})
             items.append({
-                "id": profile.profile_id,
+                "id": model_id,
                 "object": "model",
                 "created": 0,
-                "owned_by": f"cofer-u-pass:{profile.provider}",
-                "metadata": {"cofer_capabilities": caps["capabilities"]},
+                "owned_by": f"cofer-u-pass:{representative.provider}",
+                "metadata": {
+                    "display_name": representative.model.display_name,
+                    "provider": representative.provider,
+                    "reasoning_efforts": efforts,
+                    "routing_candidates": len(candidates),
+                    "routing_ambiguous": len(candidates) != 1 or len(providers) != 1,
+                    "cofer_capabilities": self._capability_payload(representative.provider, representative.model),
+                },
             })
         return items
 
@@ -131,7 +307,6 @@ class RestrictedProviderService:
             if item_type in {"function_call", "function_call_output", "computer_call", "computer_call_output"}:
                 raise ProtocolError(f"unsupported agent/tool input item: {item_type}")
             if item_type not in {None, "message"}:
-                # Some clients send content parts directly at the top level.
                 content = [item]
                 role = "user"
             else:
@@ -170,6 +345,26 @@ class RestrictedProviderService:
                 text_parts.append(f"{label}:\n" + "\n".join(role_text))
         return "\n\n".join(text_parts).strip(), file_ids
 
+    @staticmethod
+    def _parse_effort(body: dict[str, Any]) -> str | None:
+        reasoning = body.get("reasoning")
+        if reasoning is None:
+            return None
+        if not isinstance(reasoning, dict):
+            raise ProtocolError("reasoning must be an object")
+        unsupported = set(reasoning) - {"effort"}
+        if unsupported:
+            raise ProtocolError(f"unsupported reasoning fields for web models: {sorted(unsupported)}")
+        effort = reasoning.get("effort")
+        if effort is None:
+            return None
+        if not isinstance(effort, str):
+            raise ProtocolError("reasoning.effort must be a string")
+        try:
+            return InferenceSelection(model="validation", effort=effort).effort
+        except Exception as exc:
+            raise ProtocolError(f"invalid reasoning.effort: {exc}") from exc
+
     def compile_request(self, body: dict[str, Any], *, resolved_files: dict[str, Path] | None = None) -> CompiledRequest:
         if not isinstance(body, dict):
             raise ProtocolError("request body must be a JSON object")
@@ -181,8 +376,10 @@ class RestrictedProviderService:
         if body.get("tool_choice") not in {None, "none"}:
             raise ProtocolError("cofer-u-pass web models do not support tool_choice")
         model = body.get("model")
-        if not isinstance(model, str) or not model:
-            raise ProtocolError("model is required and must be a Cofer U Pass profile id")
+        if not isinstance(model, str) or not model.strip():
+            raise ProtocolError("model is required and must be a discovered Cofer U Pass model id")
+        model = model.strip()
+        effort = self._parse_effort(body)
         prompt, file_ids = self._extract_input(body)
         if not prompt and not file_ids:
             raise ProtocolError("request has no text or file input")
@@ -196,6 +393,7 @@ class RestrictedProviderService:
         protocol = self._parse_protocol(metadata, resolved_files=resolved)
         return CompiledRequest(
             model=model,
+            effort=effort,
             prompt=prompt,
             input_paths=paths,
             protocol=protocol,
@@ -223,9 +421,23 @@ class RestrictedProviderService:
             lines.append("Do not finish the task until all required files are available for download.")
         return "\n".join(lines)
 
-    def _internal_protocol(self, *, has_attachments: bool, wants_artifacts: bool) -> ProtocolDefinition:
+    def _internal_protocol(
+        self,
+        *,
+        has_attachments: bool,
+        wants_artifacts: bool,
+        selection: InferenceSelection | None,
+    ) -> ProtocolDefinition:
         capabilities = ["conversation.new", "message.send", "response.stream"]
         operations = [ProtocolOperation(type="open_conversation")]
+        if selection is not None:
+            capabilities.extend(["inference.model.select", "inference.state.verify"])
+            if selection.effort is not None:
+                capabilities.append("inference.effort.select")
+            operations.append(ProtocolOperation(
+                type="configure_inference",
+                params=selection.model_dump(mode="json"),
+            ))
         if has_attachments:
             capabilities.append("attachment.upload")
             operations.append(ProtocolOperation(type="attach_files", params={"files": "${input.files}"}))
@@ -244,7 +456,7 @@ class RestrictedProviderService:
             required.append("files")
         return ProtocolDefinition(
             protocol_id="restricted-provider-exchange",
-            version="1.1.0",
+            version="1.2.0",
             required_capabilities=capabilities,
             input_schema={"type": "object", "additionalProperties": False, "required": required, "properties": properties},
             operations=operations,
@@ -259,6 +471,7 @@ class RestrictedProviderService:
         publish_provider_files: bool = False,
     ) -> dict[str, Any]:
         request = self.compile_request(body, resolved_files=resolved_files)
+        target = await self.resolve_model(request.model, request.effort)
         normalized: NormalizedInputs | None = None
         try:
             normalized = normalize_input_files(
@@ -271,15 +484,18 @@ class RestrictedProviderService:
             if output_instruction:
                 prompt = (prompt + "\n\n" + output_instruction).strip()
             attachments = normalized.attachments
+            selection = None if target.legacy_profile_alias else target.selection
             protocol = self._internal_protocol(
-                has_attachments=bool(attachments), wants_artifacts=request.protocol.output.kind != "text"
+                has_attachments=bool(attachments),
+                wants_artifacts=request.protocol.output.kind != "text",
+                selection=selection,
             )
             inputs: dict[str, Any] = {"prompt": prompt}
             if attachments:
                 inputs["files"] = [str(p) for p in attachments]
             run = await self.service.create_run_definition(
                 protocol,
-                profile_id=request.model,
+                profile_id=target.profile_id,
                 inputs=inputs,
                 conversation_mode=ConversationMode.NEW,
                 client_request_id=request.client_request_id,
@@ -348,6 +564,17 @@ class RestrictedProviderService:
 
             response_id = "resp_" + uuid.uuid4().hex
             text = result.text.strip()
+            inference = result.metadata.get("inference") if isinstance(result.metadata, dict) else None
+            response_metadata = {
+                "cofer_run_id": run.run_id,
+                "cofer_conversation_id": result.conversation_id or "",
+                "cofer_exchange_protocol": "cofer-u-pass.exchange/1",
+                "cofer_artifact_count": str(len(artifact_meta)),
+                "cofer_provider": target.provider,
+            }
+            if isinstance(inference, dict):
+                response_metadata["cofer_effective_model"] = str(inference.get("effective_model") or "")
+                response_metadata["cofer_effective_effort"] = str(inference.get("effective_effort") or "")
             return {
                 "id": response_id,
                 "object": "response",
@@ -363,12 +590,7 @@ class RestrictedProviderService:
                 }],
                 "output_text": text,
                 "usage": None,
-                "metadata": {
-                    "cofer_run_id": run.run_id,
-                    "cofer_conversation_id": result.conversation_id or "",
-                    "cofer_exchange_protocol": "cofer-u-pass.exchange/1",
-                    "cofer_artifact_count": str(len(artifact_meta)),
-                },
+                "metadata": response_metadata,
                 "cofer_artifacts": artifact_meta,
                 "cofer_warnings": normalized.warnings,
             }
