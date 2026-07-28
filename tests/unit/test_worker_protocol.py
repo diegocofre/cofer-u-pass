@@ -66,6 +66,35 @@ async def test_worker_profile_registration_adds_models_without_removing_legacy_f
 
 
 @pytest.mark.asyncio
+async def test_worker_profile_capabilities_do_not_route_through_colliding_model_id(config):
+    service = ApplicationService(config)
+    await service.start(execute_queued=False)
+    try:
+        await service.create_profile("gpt-collision", "chatgpt")
+        await service.db.update_profile("gpt-collision", authenticated=True, status="ready")
+        worker = BridgeWorker(
+            service,
+            bridge_url="http://127.0.0.1:4011",
+            token="test-key",
+            profiles=["gpt-collision"],
+            worker_id="worker-test",
+        )
+        worker.provider.catalog.save("gpt-collision", "chatgpt", [ProviderModel(
+            id="gpt-collision",
+            provider="chatgpt",
+            display_name="GPT Collision",
+            supported_efforts=["high"],
+        )])
+
+        payload = await worker._profile_registration("gpt-collision")
+        assert payload["profile_id"] == "gpt-collision"
+        assert payload["capabilities"]["tools"] is False
+        assert payload["models"][0]["id"] == "gpt-collision"
+    finally:
+        await service.shutdown(cooperative=True)
+
+
+@pytest.mark.asyncio
 async def test_worker_registration_surfaces_catalog_error_without_stale_models(config):
     service = ApplicationService(config)
     await service.start(execute_queued=False)
