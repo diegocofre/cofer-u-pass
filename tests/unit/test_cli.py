@@ -19,6 +19,13 @@ def test_chat_command_is_registered():
     assert "--conversation-id" in result.stdout
 
 
+def test_profile_models_command_is_registered():
+    result = CliRunner().invoke(cli_module.app, ["profiles", "models", "--help"])
+    assert result.exit_code == 0
+    assert "--refresh" in result.stdout
+    assert "--json" in result.stdout
+
+
 async def test_chat_session_reuses_conversation_and_can_start_new(monkeypatch, capsys):
     from types import SimpleNamespace
 
