@@ -51,6 +51,13 @@ class ConversationMode(StrEnum):
     IMPORTED = "imported"
 
 
+def _non_empty_trimmed(value: str, *, field_name: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must be non-empty")
+    return normalized
+
+
 class ProviderModel(BaseModel):
     """Provider-neutral model advertised by an authenticated web profile."""
 
@@ -63,14 +70,27 @@ class ProviderModel(BaseModel):
     native_label: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("id")
+    @classmethod
+    def normalize_id(cls, value: str) -> str:
+        return _non_empty_trimmed(value, field_name="model id")
+
+    @field_validator("provider")
+    @classmethod
+    def normalize_provider(cls, value: str) -> str:
+        return _non_empty_trimmed(value, field_name="provider").lower()
+
+    @field_validator("display_name")
+    @classmethod
+    def normalize_display_name(cls, value: str) -> str:
+        return _non_empty_trimmed(value, field_name="display_name")
+
     @field_validator("supported_efforts")
     @classmethod
     def normalize_efforts(cls, values: list[str]) -> list[str]:
         normalized: list[str] = []
         for raw in values:
-            value = str(raw).strip().lower()
-            if not value:
-                raise ValueError("supported effort values must be non-empty")
+            value = _non_empty_trimmed(str(raw), field_name="supported effort").lower()
             if value not in normalized:
                 normalized.append(value)
         return normalized
@@ -86,12 +106,14 @@ class InferenceSelection(BaseModel):
     @field_validator("model")
     @classmethod
     def normalize_model(cls, value: str) -> str:
-        return value.strip()
+        return _non_empty_trimmed(value, field_name="model")
 
     @field_validator("effort")
     @classmethod
     def normalize_effort(cls, value: str | None) -> str | None:
-        return value.strip().lower() if value is not None else None
+        if value is None:
+            return None
+        return _non_empty_trimmed(value, field_name="effort").lower()
 
 
 class InferenceState(BaseModel):
