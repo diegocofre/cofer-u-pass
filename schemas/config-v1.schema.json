@@ -147,6 +147,38 @@
           "title": "Max Artifact Bytes",
           "type": "integer"
         },
+        "max_archive_entries": {
+          "default": 1000,
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Max Archive Entries",
+          "type": "integer"
+        },
+        "max_archive_uncompressed_bytes": {
+          "default": 524288000,
+          "minimum": 1,
+          "title": "Max Archive Uncompressed Bytes",
+          "type": "integer"
+        },
+        "max_archive_depth": {
+          "default": 12,
+          "maximum": 128,
+          "minimum": 1,
+          "title": "Max Archive Depth",
+          "type": "integer"
+        },
+        "max_combined_text_bytes": {
+          "default": 8388608,
+          "minimum": 1024,
+          "title": "Max Combined Text Bytes",
+          "type": "integer"
+        },
+        "max_inline_text_bytes": {
+          "default": 65536,
+          "minimum": 1024,
+          "title": "Max Inline Text Bytes",
+          "type": "integer"
+        },
         "allowed_input_extensions": {
           "items": {
             "type": "string"

@@ -20,6 +20,7 @@ from cofer_u_pass.domain.models import (
     ConversationMode,
     FailureClass,
     ProfileRecord,
+    ProtocolDefinition,
     RunRecord,
     RunState,
 )
@@ -208,10 +209,26 @@ class ApplicationService:
         client_request_id: str | None = None,
         spawn: bool = True,
     ) -> RunRecord:
+        protocol = load_protocol(protocol_path)
+        return await self.create_run_definition(
+            protocol, profile_id=profile_id, inputs=inputs, conversation_mode=conversation_mode,
+            conversation_id=conversation_id, client_request_id=client_request_id, spawn=spawn,
+        )
+
+    async def create_run_definition(
+        self,
+        protocol: ProtocolDefinition,
+        *,
+        profile_id: str,
+        inputs: dict[str, Any],
+        conversation_mode: ConversationMode = ConversationMode.NEW,
+        conversation_id: str | None = None,
+        client_request_id: str | None = None,
+        spawn: bool = True,
+    ) -> RunRecord:
         if not self._accepting:
             raise EnvironmentFailure("service is shutting down and is not accepting new runs")
         profile = await self._require_profile(profile_id)
-        protocol = load_protocol(protocol_path)
         validated_inputs = validate_inputs(protocol, inputs)
         adapter = self.registry.create(profile.provider)
         missing = set(protocol.required_capabilities) - adapter.capabilities

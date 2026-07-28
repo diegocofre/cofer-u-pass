@@ -1,0 +1,15 @@
+{
+  "schema": "cofer-u-pass.exchange/1",
+  "input": {
+    "strategy": "auto"
+  },
+  "output": {
+    "kind": "bundle",
+    "filename": "result.zip",
+    "required_files": [
+      "RESULT.md"
+    ],
+    "optional_files": [],
+    "allow_extra_files": true
+  }
+}

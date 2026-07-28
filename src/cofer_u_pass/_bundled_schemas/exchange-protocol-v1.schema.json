@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "ExchangeInputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "strategy": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "inline",
+            "attachments"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "title": "ExchangeInputSpec",
+      "type": "object"
+    },
+    "ExchangeOutputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "default": "text",
+          "enum": [
+            "text",
+            "files",
+            "bundle"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "filename": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filename"
+        },
+        "required_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Files",
+          "type": "array"
+        },
+        "optional_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Optional Files",
+          "type": "array"
+        },
+        "allow_extra_files": {
+          "default": true,
+          "title": "Allow Extra Files",
+          "type": "boolean"
+        }
+      },
+      "title": "ExchangeOutputSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "cofer-u-pass.exchange/1",
+      "default": "cofer-u-pass.exchange/1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "input": {
+      "$ref": "#/$defs/ExchangeInputSpec"
+    },
+    "output": {
+      "$ref": "#/$defs/ExchangeOutputSpec"
+    }
+  },
+  "title": "ExchangeProtocol",
+  "type": "object"
+}
