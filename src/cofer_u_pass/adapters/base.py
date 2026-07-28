@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cofer_u_pass.domain.blocks import block_to_markdown, block_to_text
 from cofer_u_pass.domain.errors import AdapterActionError, AdapterMismatch, AuthenticationRequired, TransientFailure
-from cofer_u_pass.domain.models import Block, FailureClass
+from cofer_u_pass.domain.models import Block, FailureClass, InferenceSelection, InferenceState, ProviderModel
 
 EventCallback = Callable[[str, dict[str, Any]], Awaitable[None]]
 
@@ -265,6 +265,52 @@ class ProviderAdapter(ABC):
     def extract_conversation_id(self, url: str) -> str | None:
         return None
 
+    async def discover_models(self, page: Page) -> list[ProviderModel]:
+        """Return provider models visible to the authenticated account.
+
+        Model discovery is optional.  Adapters must advertise
+        `inference.model.discover` before callers depend on this method.
+        """
+        return []
+
+    async def read_inference_state(self, page: Page) -> InferenceState | None:
+        """Read effective inference state when the provider exposes it reliably."""
+        return None
+
+    def verified_inference_evidence(
+        self,
+        selection: InferenceSelection,
+        state: InferenceState | None,
+    ) -> ActionEvidence:
+        if state is None or not state.verified:
+            raise AdapterMismatch("provider inference state could not be verified")
+        if state.model != selection.model:
+            raise AdapterMismatch(
+                f"provider selected model {state.model!r}; requested {selection.model!r}"
+            )
+        if selection.effort is not None and state.effort != selection.effort:
+            raise AdapterMismatch(
+                f"provider selected effort {state.effort!r}; requested {selection.effort!r}"
+            )
+        return ActionEvidence({
+            "requested_model": selection.model,
+            "requested_effort": selection.effort,
+            "effective_model": state.model,
+            "effective_effort": state.effort,
+            "native_model": state.native_model,
+            "native_effort": state.native_effort,
+            "verified": True,
+            "metadata": state.metadata,
+        })
+
+    async def configure_inference(self, page: Page, selection: InferenceSelection) -> ActionEvidence:
+        """Apply and verify provider inference selection.
+
+        Provider-specific adapters override this method.  The default fails closed
+        rather than pretending inference selection succeeded.
+        """
+        raise AdapterMismatch(f"adapter {self.provider} does not support inference selection")
+
     async def attach_files(self, page: Page, files: list[Path]) -> ActionEvidence:
         if not files:
             return ActionEvidence({"files": []})
@@ -476,6 +522,17 @@ class ProviderAdapter(ABC):
                 current = urlparse(page.url)
                 if (expected.scheme, expected.netloc, expected.path) != (current.scheme, current.netloc, current.path):
                     return False
+            return True
+        if action_type == "configure_inference":
+            requested_model = evidence.get("requested_model")
+            requested_effort = evidence.get("requested_effort")
+            if not isinstance(requested_model, str):
+                return False
+            state = await self.read_inference_state(page)
+            if state is None or not state.verified or state.model != requested_model:
+                return False
+            if requested_effort is not None and state.effort != requested_effort:
+                return False
             return True
         if action_type == "send_message":
             expected_users = evidence.get("user_message_count")
