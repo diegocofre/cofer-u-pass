@@ -310,6 +310,41 @@ def chat(
 
 
 @app.command()
+def worker(
+    bridge: str = typer.Option("http://127.0.0.1:4011", "--bridge", help="Cofer One IA bridge control URL."),
+    profile: list[str] = typer.Option([], "--profile", help="Profile exposed by this worker; repeatable. Defaults to all ready profiles."),
+    token_env: str = typer.Option("COFER_U_PASS_BRIDGE_KEY", "--token-env", help="Environment variable containing the bridge key."),
+    once: bool = typer.Option(False, "--once", help="Process at most one job, useful for diagnostics."),
+):
+    """Connect outward to Cofer One IA and execute restricted text/file jobs."""
+    async def work():
+        from cofer_u_pass.provider.worker import BridgeWorker, bridge_token_from_env
+        service = ApplicationService(load_config())
+        await service.start(execute_queued=True)
+        try:
+            selected = list(profile)
+            if not selected:
+                selected = [p.profile_id for p in await service.list_profiles() if p.status == "ready" and p.authenticated]
+            if not selected:
+                raise typer.BadParameter("no ready authenticated profiles; pass --profile or authenticate a profile first")
+            for profile_id in selected:
+                current = await service.profile_status(profile_id, verify=False)
+                if current.status != "ready" or not current.authenticated:
+                    raise typer.BadParameter(
+                        f"profile {profile_id!r} is not ready/authenticated; authenticate or verify it before starting the worker"
+                    )
+            bridge_worker = BridgeWorker(
+                service, bridge_url=bridge, token=bridge_token_from_env(token_env), profiles=selected
+            )
+            typer.echo(f"Worker {bridge_worker.worker_id} -> {bridge}; profiles: {', '.join(selected)}")
+            await bridge_worker.run(once=once)
+        finally:
+            await service.shutdown(cooperative=True)
+
+    arun(work())
+
+
+@app.command()
 def status(run_id: str, json_output: bool = typer.Option(False, "--json")):
     async def work():
         s = ApplicationService(load_config()); await s.start(execute_queued=False); return await s.get_run(run_id)

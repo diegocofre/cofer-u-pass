@@ -6,14 +6,17 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from cofer_u_pass.application.service import ApplicationService
 from cofer_u_pass.config.settings import AppConfig, load_config
+from cofer_u_pass.domain.errors import ProtocolError
 from cofer_u_pass.domain.models import ConversationMode, RunState
+from cofer_u_pass.provider.files import ProviderFileStore
+from cofer_u_pass.provider.service import RestrictedProviderService
 
 
 class CreateRunRequest(BaseModel):
@@ -34,6 +37,8 @@ class OutcomeResolutionRequest(BaseModel):
 def create_app(config: AppConfig | None = None) -> FastAPI:
     cfg = config or load_config()
     service = ApplicationService(cfg)
+    provider_files = ProviderFileStore(cfg)
+    provider = RestrictedProviderService(service, provider_files)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -44,14 +49,14 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         finally:
             await service.shutdown(cooperative=True)
 
-    app = FastAPI(title="Cofer U Pass", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="Cofer U Pass", version="1.1.0", lifespan=lifespan)
     app.state.service = service
     if cfg.api.cors_origins:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=cfg.api.cors_origins,
             allow_credentials=False,
-            allow_methods=["GET", "POST"],
+            allow_methods=["GET", "POST", "DELETE"],
             allow_headers=["Authorization", "Content-Type", "Last-Event-ID"],
         )
 
@@ -68,6 +73,96 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         supplied = authorization[7:].strip()
         if not secrets.compare_digest(supplied, expected_token()):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+
+
+    # -----------------------------------------------------------------------
+    # Restricted OpenAI-compatible provider surface. These endpoints expose
+    # text/file exchange only; tool/function calling is deliberately rejected.
+    # -----------------------------------------------------------------------
+
+    @app.get("/v1/models")
+    async def provider_models(_: None = Depends(auth)):
+        return {"object": "list", "data": await provider.list_models()}
+
+    @app.get("/v1/models/{model_id}/capabilities")
+    async def provider_capabilities(model_id: str, _: None = Depends(auth)):
+        try:
+            return await provider.model_capabilities(model_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="model/profile not found") from exc
+
+    @app.post("/v1/files")
+    async def provider_upload_file(
+        file: UploadFile = File(...),
+        purpose: str = Form(default="user_data"),
+        _: None = Depends(auth),
+    ):
+        try:
+            meta = await asyncio.to_thread(
+                provider_files.put_stream,
+                file.file,
+                filename=file.filename or "upload.bin",
+                purpose=purpose,
+            )
+            return meta.model_dump(mode="json")
+        except ValueError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        finally:
+            await file.close()
+
+    @app.get("/v1/files/{file_id}")
+    async def provider_file_metadata(file_id: str, _: None = Depends(auth)):
+        try:
+            return provider_files.get(file_id).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="file not found") from exc
+
+    @app.get("/v1/files/{file_id}/content")
+    async def provider_file_content(file_id: str, _: None = Depends(auth)):
+        try:
+            meta = provider_files.get(file_id)
+            path = provider_files.content_path(file_id)
+            return FileResponse(path, media_type=meta.mime_type or "application/octet-stream", filename=meta.filename)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="file not found") from exc
+
+    @app.delete("/v1/files/{file_id}")
+    async def provider_delete_file(file_id: str, _: None = Depends(auth)):
+        try:
+            provider_files.delete(file_id)
+            return {"id": file_id, "object": "file", "deleted": True}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="file not found") from exc
+
+    @app.post("/v1/responses", response_model=None)
+    async def provider_responses(request: Request, _: None = Depends(auth)):
+        try:
+            body = await request.json()
+            response = await provider.execute(body, publish_provider_files=True)
+        except ProtocolError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if not body.get("stream"):
+            return JSONResponse(response)
+
+        async def buffered_stream() -> AsyncIterator[str]:
+            text = response.get("output_text") or ""
+            created = {
+                "type": "response.created",
+                "response": {k: v for k, v in response.items() if k not in {"output", "output_text"}},
+            }
+            yield "data: " + json.dumps(created, ensure_ascii=False) + "\n\n"
+            if text:
+                yield "data: " + json.dumps({
+                    "type": "response.output_text.delta",
+                    "response_id": response["id"],
+                    "delta": text,
+                }, ensure_ascii=False) + "\n\n"
+            yield "data: " + json.dumps({"type": "response.completed", "response": response}, ensure_ascii=False) + "\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(buffered_stream(), media_type="text/event-stream")
 
     @app.get("/api/v1/health")
     async def health(_: None = Depends(auth)):

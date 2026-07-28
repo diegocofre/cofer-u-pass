@@ -28,6 +28,11 @@ class ApiConfig(BaseModel):
 class SecurityConfig(BaseModel):
     max_input_file_bytes: int = 100 * 1024 * 1024
     max_artifact_bytes: int = 500 * 1024 * 1024
+    max_archive_entries: int = Field(default=1000, ge=1, le=100000)
+    max_archive_uncompressed_bytes: int = Field(default=500 * 1024 * 1024, ge=1)
+    max_archive_depth: int = Field(default=12, ge=1, le=128)
+    max_combined_text_bytes: int = Field(default=8 * 1024 * 1024, ge=1024)
+    max_inline_text_bytes: int = Field(default=64 * 1024, ge=1024)
     allowed_input_extensions: list[str] = Field(default_factory=list)
     allowed_artifact_extensions: list[str] = Field(default_factory=list)
 
@@ -84,6 +89,10 @@ class AppConfig(BaseModel):
     @property
     def artifacts_path(self) -> Path:
         return self.data_path / "artifacts"
+
+    @property
+    def provider_files_path(self) -> Path:
+        return self.data_path / "provider-files"
 
     @property
     def evidence_path(self) -> Path:
@@ -192,6 +201,11 @@ cors_origins = []
 [security]
 max_input_file_bytes = 104857600
 max_artifact_bytes = 524288000
+max_archive_entries = 1000
+max_archive_uncompressed_bytes = 524288000
+max_archive_depth = 12
+max_combined_text_bytes = 8388608
+max_inline_text_bytes = 65536
 allowed_input_extensions = []
 allowed_artifact_extensions = []
 
@@ -236,7 +250,7 @@ def restrict_private_path(path: Path, *, directory: bool) -> None:
 def ensure_base_layout(config: AppConfig) -> None:
     for path in [
         config.data_path, config.temp_path, config.profiles_path, config.artifacts_path,
-        config.evidence_path, config.backups_path, config.logs_path, config.secrets_path,
+        config.provider_files_path, config.evidence_path, config.backups_path, config.logs_path, config.secrets_path,
     ]:
         path.mkdir(parents=True, exist_ok=True)
         restrict_private_path(path, directory=True)

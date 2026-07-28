@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0 - 2026-07-28
+
+- Add restricted OpenAI-compatible provider mode for authenticated web profiles through `/v1/responses` and `/v1/files`.
+- Add `cofer-u-pass.exchange/1`, a minimal per-request protocol that controls input transport and expected text/file/bundle output without encoding task roles or templates.
+- Explicitly reject `tools`, `tool_choice`, and function-calling semantics for web models.
+- Add safe ZIP input normalization with traversal, symlink, nested-archive, entry-count, expanded-size, and depth protections.
+- Add provider-generated artifact and ZIP validation, including required bundle-member checks.
+- Add a persistent provider file store for files uploaded before a run.
+- Add `cofer-u-pass worker` for an outbound, authenticated connection to a Cofer One IA bridge; browser profiles and cookies remain local to the host.
+- Stream bridge input/output files in bounded chunks and keep worker heartbeats alive during long browser tasks.
+- Expand ChatGPT artifact locators for downloadable sandbox/backend file links.
+- Add provider/file/exchange/worker/API regression coverage.
+- Remove stale committed 1.0.6 build artifacts; v1.1 release wheel/sdist are built and validated from source instead of leaving mismatched binaries in the tree.
+
 ## 1.0.6 - 2026-07-27
 
 - Add `cofer-u-pass chat --profile PROFILE`, a clean interactive terminal façade over ordinary persisted runs.

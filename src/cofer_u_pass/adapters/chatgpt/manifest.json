@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
   "provider": "chatgpt",
-  "adapter_version": "1.0.2",
+  "adapter_version": "1.1.0",
   "engine_contract": "1.0",
-  "rule_version": "1.0.2",
+  "rule_version": "1.1.0",
   "rule_schema_version": "1.0",
   "capabilities": [
     "conversation.new",
