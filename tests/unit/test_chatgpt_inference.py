@@ -25,13 +25,23 @@ def test_chatgpt_model_labels_become_deterministic_public_ids(label, expected_id
         ("High", "high"),
         ("Advanced", "high"),
         ("Extra High", "xhigh"),
-        ("Maximum", "xhigh"),
+        ("Maximum", "max"),
+        ("Reasoning effort: Max", "max"),
+        ("Medio", "medium"),
+        ("Alto", "high"),
+        ("Muy alto", "xhigh"),
+        ("Máximo", "max"),
         ("Low", "low"),
         ("Off", "none"),
     ],
 )
 def test_chatgpt_intelligence_labels_map_to_normalized_effort(label, expected):
     assert _normalize_effort(label) == expected
+
+
+def test_chatgpt_native_effort_ids_are_normalized_without_visible_english_text():
+    assert _normalize_effort("reasoning-effort-high") == "high"
+    assert _normalize_effort("intelligence_extra_high") == "xhigh"
 
 
 def test_chatgpt_intelligence_mapping_does_not_treat_combined_model_labels_as_effort():
