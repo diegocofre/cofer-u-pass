@@ -3,7 +3,7 @@
 ## 1.2.2 - 2026-07-30
 
 - Scope ChatGPT model and reasoning-effort discovery to the popup opened by each picker instead of scanning all visible menu items in the application.
-- Prefer `aria-controls` / `aria-owns` popup ownership, then newly opened `menu` / `listbox` / `dialog` scopes, with a causal newly-revealed-option fallback for provider variants that expose no popup container.
+- Prefer `aria-controls` / `aria-owns` popup ownership, then newly opened `menu` / `listbox` scopes, with a causal newly-revealed-option fallback for provider variants that expose no popup container.
 - Exclude already-visible sidebar/history menu items from picker discovery so chat titles such as `GPT-5.6 Pro` or `High` cannot be treated as model/effort choices or clicked during catalog refresh.
 - Bump the ChatGPT adapter contract version to `1.2.2` and add controlled Chromium coverage for both owned popup scopes and sidebar-contaminated fallback markup.
 
