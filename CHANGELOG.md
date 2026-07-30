@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 - 2026-07-30
+
+- Make ChatGPT model-picker discovery resilient to current web variants that render the picker without `aria-haspopup` or the historical dropdown `data-testid`.
+- Keep model selection fail-closed by requiring positive semantic evidence and rejecting menu rows/options as picker candidates.
+- Add controlled Chromium regression coverage for a `role=button` model picker with no popup metadata, including a nearby misleading `Upgrade to GPT-5.6 Pro` button that must not be selected.
+
 ## 1.2.0 - 2026-07-28
 
 - Separate authenticated browser profiles from public inference identity: restricted provider requests now use discovered provider `model` ids plus optional `reasoning.effort`.
