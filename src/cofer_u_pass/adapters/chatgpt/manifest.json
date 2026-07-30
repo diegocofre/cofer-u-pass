@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "provider": "chatgpt",
-  "adapter_version": "1.2.5",
+  "adapter_version": "1.2.6",
   "engine_contract": "1.0",
   "rule_version": "1.2.0",
   "rule_schema_version": "1.0",
