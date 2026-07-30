@@ -6,6 +6,7 @@ import math
 from playwright.async_api import Locator, Page
 
 from cofer_u_pass.domain.errors import AdapterMismatch
+from cofer_u_pass.domain.models import ProviderModel
 
 from .adapter import (
     ChatGPTAdapter as _BaseChatGPTAdapter,
@@ -45,15 +46,18 @@ _MAX_PICKER_CENTER_X_DELTA_PX = 480.0
 _MAX_OPTION_DISTANCE_PX = 520.0
 _MAX_OPTION_VIEWPORT_RATIO = 0.32
 _MAX_OPTION_LEFT_GAP_PX = 220.0
+_SIDEBAR_SURFACE_SELECTOR = (
+    "aside, nav, [data-sidebar-item], [data-testid*='sidebar' i], "
+    "[data-testid*='history' i], [aria-label*='chat history' i], "
+    "[aria-label*='conversation history' i], a[href^='/c/']"
+)
 
 
 async def _is_sidebar_like(candidate: Locator) -> bool:
     try:
         return bool(await candidate.evaluate(
-            """element => Boolean(element.closest(
-                "aside, nav, [data-testid*='sidebar' i], [data-testid*='history' i], " +
-                "[aria-label*='chat history' i], [aria-label*='conversation history' i]"
-            ))"""
+            "element => Boolean(element.closest(arguments[1]))",
+            _SIDEBAR_SURFACE_SELECTOR,
         ))
     except Exception:
         return False
@@ -102,6 +106,66 @@ async def _is_composer_local(candidate: Locator) -> bool:
         return False
 
 
+async def _guarded_inference_click(page: Page, target: Locator, *, purpose: str) -> None:
+    """Click an already-visible inference control without allowing Playwright auto-scroll."""
+    if await _is_sidebar_like(target):
+        raise AdapterMismatch(f"ChatGPT {purpose} resolved inside chat history/sidebar; refusing click")
+
+    try:
+        probe = await target.evaluate(
+            """(element, sidebarSelector) => {
+                const describe = node => {
+                    if (!node) return null;
+                    return {
+                        tag: node.tagName ? node.tagName.toLowerCase() : null,
+                        id: node.id || null,
+                        role: node.getAttribute?.('role') || null,
+                        testid: node.getAttribute?.('data-testid') || null,
+                        sidebarItem: node.getAttribute?.('data-sidebar-item') || null,
+                        ariaLabel: node.getAttribute?.('aria-label') || null,
+                        href: node.getAttribute?.('href') || null,
+                        text: (node.innerText || node.textContent || '')
+                            .replace(/\s+/g, ' ').trim().slice(0, 120),
+                    };
+                };
+
+                const rect = element.getBoundingClientRect();
+                const x = rect.left + rect.width / 2;
+                const y = rect.top + rect.height / 2;
+                const inViewport = rect.width > 0 && rect.height > 0 &&
+                    x >= 0 && y >= 0 && x < window.innerWidth && y < window.innerHeight;
+                const hit = inViewport ? document.elementFromPoint(x, y) : null;
+                const sidebarHit = hit ? hit.closest(sidebarSelector) : null;
+                return {
+                    x,
+                    y,
+                    inViewport,
+                    hitIsTarget: Boolean(hit && (hit === element || element.contains(hit))),
+                    target: describe(element),
+                    hit: describe(hit),
+                    sidebarHit: describe(sidebarHit),
+                };
+            }""",
+            _SIDEBAR_SURFACE_SELECTOR,
+        )
+    except Exception as exc:
+        raise AdapterMismatch(f"ChatGPT {purpose} could not be hit-tested safely: {exc}") from exc
+
+    if not probe.get("inViewport"):
+        raise AdapterMismatch(
+            f"ChatGPT {purpose} is outside the viewport; refusing Playwright auto-scroll; "
+            f"target={probe.get('target')!r}"
+        )
+
+    if not probe.get("hitIsTarget"):
+        raise AdapterMismatch(
+            f"ChatGPT {purpose} is blocked before click; target={probe.get('target')!r}; "
+            f"hit={probe.get('hit')!r}; sidebar_hit={probe.get('sidebarHit')!r}"
+        )
+
+    await page.mouse.click(float(probe["x"]), float(probe["y"]))
+
+
 async def _is_model_picker_candidate(candidate: Locator) -> bool:
     """Accept strong model controls globally and weak text evidence only near the composer."""
     try:
@@ -115,6 +179,8 @@ async def _is_model_picker_candidate(candidate: Locator) -> bool:
     except Exception:
         return False
 
+    if await _is_sidebar_like(candidate):
+        return False
     if "model-switcher" in native_id.lower():
         return True
     if "model" in aria_label.lower():
@@ -124,8 +190,6 @@ async def _is_model_picker_candidate(candidate: Locator) -> bool:
     if parsed is None:
         return False
     if _headline(label).casefold() != _headline(parsed[1]).casefold():
-        return False
-    if await _is_sidebar_like(candidate):
         return False
     return await _is_composer_local(candidate)
 
@@ -143,13 +207,13 @@ async def _is_effort_picker_candidate(candidate: Locator) -> bool:
     except Exception:
         return False
 
+    if await _is_sidebar_like(candidate):
+        return False
     structural = f"{native_id} {aria_label}".lower()
     if any(token in structural for token in ("intelligence", "reasoning", "thinking", "effort")):
         return True
 
     if _normalize_effort(label) is None and _normalize_effort(native_id) is None:
-        return False
-    if await _is_sidebar_like(candidate):
         return False
     return await _is_composer_local(candidate)
 
@@ -294,7 +358,7 @@ async def _opened_option_items(
     await _mark_currently_visible(page, _POPUP_SCOPE_SELECTOR, _PREEXISTING_POPUP_MARKER)
 
     try:
-        await picker.click()
+        await _guarded_inference_click(page, picker, purpose=f"{kind} picker")
         await asyncio.sleep(0.1)
 
         controlled = await _controlled_popup_scopes(page, picker, selector, kind=kind)
@@ -313,10 +377,6 @@ async def _opened_option_items(
         if opened_scopes:
             return await _matching_items(opened_scopes[0], selector, kind=kind)
 
-        # Provider variants without an accessible popup container are accepted
-        # only when newly revealed options are close to the picker and outside
-        # sidebar/history surfaces. Virtualized chat-history nodes therefore
-        # cannot become model/effort choices merely because they appeared later.
         items = page.locator(selector)
         revealed: list[Locator] = []
         for index in range(await items.count()):
@@ -345,7 +405,7 @@ async def _opened_option_items(
 class ChatGPTAdapter(_BaseChatGPTAdapter):
     """Current ChatGPT adapter with resilient, evidence-based picker discovery."""
 
-    adapter_version = "1.2.3"
+    adapter_version = "1.2.4"
 
     async def _model_picker(self, page: Page) -> Locator:
         picker = await self._first_visible(page, _MODEL_PICKER_SELECTORS)
@@ -444,6 +504,68 @@ class ChatGPTAdapter(_BaseChatGPTAdapter):
             await _close_popup(page)
             raise AdapterMismatch("ChatGPT effort picker opened but no scoped effort choices could be recognized")
         return choices
+
+    async def _select_model(self, page: Page, model_id: str) -> _Choice:
+        choices = await self._model_options(page)
+        match = next((choice for choice in choices if choice.id == model_id), None)
+        if match is None:
+            await _close_popup(page)
+            available = ", ".join(choice.id for choice in choices)
+            raise AdapterMismatch(
+                f"ChatGPT model {model_id!r} is not selectable; available models: {available or '(none)'}"
+            )
+        await _guarded_inference_click(page, match.locator, purpose=f"model option {model_id}")
+        await asyncio.sleep(0.1)
+        return match
+
+    async def _select_effort(self, page: Page, effort: str) -> _Choice:
+        choices = await self._effort_options(page)
+        match = next((choice for choice in choices if choice.id == effort), None)
+        if match is None:
+            await _close_popup(page)
+            available = ", ".join(choice.id for choice in choices)
+            raise AdapterMismatch(
+                f"ChatGPT effort {effort!r} is not selectable; available efforts: {available or '(none)'}"
+            )
+        await _guarded_inference_click(page, match.locator, purpose=f"effort option {effort}")
+        await asyncio.sleep(0.1)
+        return match
+
+    async def discover_models(self, page: Page) -> list[ProviderModel]:
+        await self.ensure_authenticated(page)
+        original = await self.read_inference_state(page)
+        choices = await self._model_options(page)
+        discovered: list[ProviderModel] = []
+        try:
+            for index, choice in enumerate(choices):
+                if index == 0:
+                    await _guarded_inference_click(
+                        page,
+                        choice.locator,
+                        purpose=f"model option {choice.id}",
+                    )
+                    await asyncio.sleep(0.1)
+                else:
+                    await self._select_model(page, choice.id)
+                efforts = [item.id for item in await self._effort_options(page)]
+                await _close_popup(page)
+                discovered.append(ProviderModel(
+                    id=choice.id,
+                    provider=self.provider,
+                    display_name=choice.label,
+                    supported_efforts=efforts,
+                    native_id=choice.native_id,
+                    native_label=choice.label,
+                ))
+        finally:
+            if original is not None:
+                try:
+                    await self._select_model(page, original.model)
+                    if original.effort is not None:
+                        await self._select_effort(page, original.effort)
+                except Exception:
+                    pass
+        return discovered
 
 
 __all__ = ["ChatGPTAdapter"]
