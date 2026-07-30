@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.3 - 2026-07-30
+
+- Anchor weak ChatGPT model and reasoning-effort picker detection to the local composer surface instead of relying on a broad `<main>` boundary.
+- Reject sidebar/history-like candidates before weak picker acceptance, while preserving strong provider metadata such as model-switcher test ids and inference-specific ARIA labels.
+- Harden the unowned-popup fallback so newly materialized options must also be spatially close to the picker; virtualized chat-history rows that appear after a click can no longer become model/effort choices.
+- Fail closed when a picker opens but no safely scoped option surface can be established.
+- Add controlled Chromium regression coverage that materializes model- and effort-looking sidebar rows only after the picker is clicked and asserts that none are clicked.
+- Align the ChatGPT adapter manifest with adapter version `1.2.3`; declarative `rule_version` remains `1.2.0` because `rules.json` is unchanged.
+
 ## 1.2.2 - 2026-07-30
 
 - Scope ChatGPT model and reasoning-effort discovery to the popup opened by each picker instead of scanning all visible menu items in the application.

@@ -8,14 +8,39 @@ from cofer_u_pass.adapters.registry import AdapterRegistry
 
 HTML = r'''<!doctype html>
 <html>
+<head>
+<style>
+  body { margin: 0; min-height: 900px; }
+  #left-rail {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 260px;
+    height: 100vh;
+    overflow: auto;
+  }
+  main {
+    margin-left: 520px;
+    padding-top: 260px;
+    width: 620px;
+  }
+  #model-menu, #effort-menu {
+    margin-top: 8px;
+    width: 260px;
+  }
+  .history, [role="menuitemradio"] {
+    display: block;
+    min-height: 32px;
+  }
+</style>
+</head>
 <body>
-  <aside id="sidebar">
+  <div id="left-rail">
     <button class="history">GPT-5.6 Pro</button>
     <button role="menuitem" class="history">Comparison GPT-5.6 Thinking vs Claude</button>
-    <button role="menuitem" class="history">GPT-5.6 Pro migration notes</button>
     <button role="menuitem" class="history">High priority project</button>
-    <button class="history" aria-haspopup="menu">High</button>
-  </aside>
+    <div id="virtualized-history"></div>
+  </div>
 
   <main>
     <div data-testid="composer"><textarea id="prompt-textarea"></textarea></div>
@@ -36,7 +61,7 @@ HTML = r'''<!doctype html>
 
 <script>
 window.sidebarClicks = 0;
-document.querySelectorAll('#sidebar .history').forEach(item => {
+document.querySelectorAll('#left-rail .history').forEach(item => {
   item.onclick = () => { window.sidebarClicks += 1; };
 });
 
@@ -44,10 +69,45 @@ const modelButton = document.querySelector('#model-trigger');
 const effortButton = document.querySelector('#effort-trigger');
 const modelMenu = document.querySelector('#model-menu');
 const effortMenu = document.querySelector('#effort-menu');
+const virtualizedHistory = document.querySelector('#virtualized-history');
 
 function closeMenus() { modelMenu.hidden = true; effortMenu.hidden = true; }
-modelButton.onclick = () => { const was = modelMenu.hidden; closeMenus(); modelMenu.hidden = !was; };
-effortButton.onclick = () => { const was = effortMenu.hidden; closeMenus(); effortMenu.hidden = !was; };
+function materializeSidebarNoise() {
+  virtualizedHistory.replaceChildren();
+
+  const fakeMenu = document.createElement('div');
+  fakeMenu.className = 'history-menu';
+  fakeMenu.setAttribute('role', 'menu');
+
+  const fakeModel = document.createElement('button');
+  fakeModel.className = 'history';
+  fakeModel.setAttribute('role', 'menuitemradio');
+  fakeModel.textContent = 'GPT-5.6 Thinking';
+  fakeModel.onclick = () => { window.sidebarClicks += 1; };
+
+  const fakeEffort = document.createElement('button');
+  fakeEffort.className = 'history';
+  fakeEffort.setAttribute('role', 'menuitemradio');
+  fakeEffort.textContent = 'High';
+  fakeEffort.onclick = () => { window.sidebarClicks += 1; };
+
+  fakeMenu.append(fakeModel, fakeEffort);
+  virtualizedHistory.append(fakeMenu);
+}
+
+modelButton.onclick = () => {
+  materializeSidebarNoise();
+  const was = modelMenu.hidden;
+  closeMenus();
+  modelMenu.hidden = !was;
+};
+
+effortButton.onclick = () => {
+  materializeSidebarNoise();
+  const was = effortMenu.hidden;
+  closeMenus();
+  effortMenu.hidden = !was;
+};
 
 document.querySelectorAll('#model-menu [role="menuitemradio"]').forEach(item => {
   item.onclick = () => {
@@ -75,7 +135,7 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') clos
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_chatgpt_scopes_fallback_picker_options_to_newly_revealed_menu_items():
+async def test_chatgpt_scopes_unowned_picker_options_away_from_virtualized_sidebar_noise():
     playwright = await async_playwright().start()
     try:
         try:
@@ -83,12 +143,13 @@ async def test_chatgpt_scopes_fallback_picker_options_to_newly_revealed_menu_ite
         except Exception:
             pytest.skip("Playwright Chromium is not installed")
         try:
-            page = await browser.new_page()
+            page = await browser.new_page(viewport={"width": 1440, "height": 900})
             await page.set_content(HTML)
             adapter = AdapterRegistry().create("chatgpt")
 
             picker = await adapter._model_picker(page)
             assert await picker.get_attribute("id") == "model-trigger"
+
             effort_picker = await adapter._effort_picker(page)
             assert effort_picker is not None
             assert await effort_picker.get_attribute("id") == "effort-trigger"

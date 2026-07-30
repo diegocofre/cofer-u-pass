@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 
 from playwright.async_api import Locator, Page
 
@@ -26,22 +27,83 @@ _MODEL_PICKER_FALLBACK_SELECTORS = (
     "[data-testid*='model-switcher' i]",
     "button[aria-label*='model' i]",
     "[role='button'][aria-label*='model' i]",
-    "main button",
-    "main [role='button']",
+    "button",
+    "[role='button']",
 )
 
 _EFFORT_PICKER_FALLBACK_SELECTORS = (
-    "main button[aria-haspopup]",
-    "main [role='button'][aria-haspopup]",
+    "button[aria-haspopup]",
+    "[role='button'][aria-haspopup]",
 )
 
 _POPUP_SCOPE_SELECTOR = "[role='menu'], [role='listbox']"
 _PREEXISTING_OPTION_MARKER = "data-cofer-u-pass-preexisting-option"
 _PREEXISTING_POPUP_MARKER = "data-cofer-u-pass-preexisting-popup"
+_MAX_PICKER_DISTANCE_PX = 760.0
+_MAX_PICKER_VIEWPORT_RATIO = 0.45
+_MAX_PICKER_CENTER_X_DELTA_PX = 480.0
+_MAX_OPTION_DISTANCE_PX = 520.0
+_MAX_OPTION_VIEWPORT_RATIO = 0.32
+_MAX_OPTION_LEFT_GAP_PX = 220.0
+
+
+async def _is_sidebar_like(candidate: Locator) -> bool:
+    try:
+        return bool(await candidate.evaluate(
+            """element => Boolean(element.closest(
+                "aside, nav, [data-testid*='sidebar' i], [data-testid*='history' i], " +
+                "[aria-label*='chat history' i], [aria-label*='conversation history' i]"
+            ))"""
+        ))
+    except Exception:
+        return False
+
+
+async def _is_composer_local(candidate: Locator) -> bool:
+    """Require weak picker evidence to be structurally and spatially local to the composer."""
+    try:
+        return bool(await candidate.evaluate(
+            """(element, limits) => {
+                const composer =
+                    document.querySelector("[data-testid='composer']") ||
+                    document.querySelector("#prompt-textarea");
+                if (!composer) return false;
+
+                let common = composer;
+                while (common && !common.contains(element)) common = common.parentElement;
+                if (!common || common === document.body || common === document.documentElement) {
+                    return false;
+                }
+
+                const composerRect = composer.getBoundingClientRect();
+                const candidateRect = element.getBoundingClientRect();
+                if (!composerRect.width || !composerRect.height ||
+                    !candidateRect.width || !candidateRect.height) {
+                    return false;
+                }
+
+                const composerCx = composerRect.left + composerRect.width / 2;
+                const composerCy = composerRect.top + composerRect.height / 2;
+                const candidateCx = candidateRect.left + candidateRect.width / 2;
+                const candidateCy = candidateRect.top + candidateRect.height / 2;
+                const diagonal = Math.hypot(window.innerWidth || 1280, window.innerHeight || 720);
+                const maxDistance = Math.min(limits.maxDistance, diagonal * limits.viewportRatio);
+
+                return Math.hypot(candidateCx - composerCx, candidateCy - composerCy) <= maxDistance &&
+                    Math.abs(candidateCx - composerCx) <= limits.maxCenterXDelta;
+            }""",
+            {
+                "maxDistance": _MAX_PICKER_DISTANCE_PX,
+                "viewportRatio": _MAX_PICKER_VIEWPORT_RATIO,
+                "maxCenterXDelta": _MAX_PICKER_CENTER_X_DELTA_PX,
+            },
+        ))
+    except Exception:
+        return False
 
 
 async def _is_model_picker_candidate(candidate: Locator) -> bool:
-    """Accept only controls with positive evidence that they select a model."""
+    """Accept strong model controls globally and weak text evidence only near the composer."""
     try:
         role = (await candidate.get_attribute("role") or "").strip().lower()
         if role in {"menuitem", "menuitemradio", "option"}:
@@ -53,9 +115,6 @@ async def _is_model_picker_candidate(candidate: Locator) -> bool:
     except Exception:
         return False
 
-    # Structural provider metadata is stronger than the current visible label.
-    # ChatGPT may display a mode such as "Instant" on the trigger and expose the
-    # actual model only after the picker opens.
     if "model-switcher" in native_id.lower():
         return True
     if "model" in aria_label.lower():
@@ -64,20 +123,15 @@ async def _is_model_picker_candidate(candidate: Locator) -> bool:
     parsed = _model_choice(label, native_id)
     if parsed is None:
         return False
-
-    # Last-resort semantic fallback for current ChatGPT variants that render the
-    # picker as an ordinary button/role=button with no popup or test-id metadata.
-    # Require both an exact model label and membership in the main application
-    # surface so a same-named chat-history/sidebar button cannot become a picker.
-    try:
-        in_main = await candidate.evaluate("element => Boolean(element.closest('main'))")
-    except Exception:
-        in_main = False
-    return in_main and _headline(label).casefold() == _headline(parsed[1]).casefold()
+    if _headline(label).casefold() != _headline(parsed[1]).casefold():
+        return False
+    if await _is_sidebar_like(candidate):
+        return False
+    return await _is_composer_local(candidate)
 
 
 async def _is_effort_picker_candidate(candidate: Locator) -> bool:
-    """Accept strong effort controls globally and weak text evidence only in main."""
+    """Accept strong effort controls globally and weak text evidence only near the composer."""
     try:
         role = (await candidate.get_attribute("role") or "").strip().lower()
         if role in {"menuitem", "menuitemradio", "option"}:
@@ -95,11 +149,9 @@ async def _is_effort_picker_candidate(candidate: Locator) -> bool:
 
     if _normalize_effort(label) is None and _normalize_effort(native_id) is None:
         return False
-
-    try:
-        return bool(await candidate.evaluate("element => Boolean(element.closest('main'))"))
-    except Exception:
+    if await _is_sidebar_like(candidate):
         return False
+    return await _is_composer_local(candidate)
 
 
 def _css_attr_value(value: str) -> str:
@@ -203,6 +255,32 @@ async def _new_popup_scopes(page: Page, selector: str, *, kind: str) -> list[Loc
     return matches
 
 
+async def _is_surface_near_picker(page: Page, picker: Locator, surface: Locator) -> bool:
+    """Reject unowned surfaces unless they are spatially close to the picker."""
+    if await _is_sidebar_like(surface):
+        return False
+    try:
+        picker_box = await picker.bounding_box()
+        item_box = await surface.bounding_box()
+        if not picker_box or not item_box:
+            return False
+
+        picker_cx = picker_box["x"] + picker_box["width"] / 2
+        picker_cy = picker_box["y"] + picker_box["height"] / 2
+        item_cx = item_box["x"] + item_box["width"] / 2
+        item_cy = item_box["y"] + item_box["height"] / 2
+
+        viewport = page.viewport_size or {"width": 1280, "height": 720}
+        diagonal = math.hypot(viewport["width"], viewport["height"])
+        max_distance = min(_MAX_OPTION_DISTANCE_PX, diagonal * _MAX_OPTION_VIEWPORT_RATIO)
+
+        distance = math.hypot(item_cx - picker_cx, item_cy - picker_cy)
+        left_gap = picker_box["x"] - (item_box["x"] + item_box["width"])
+        return distance <= max_distance and left_gap <= _MAX_OPTION_LEFT_GAP_PX
+    except Exception:
+        return False
+
+
 async def _opened_option_items(
     page: Page,
     picker: Locator,
@@ -210,7 +288,7 @@ async def _opened_option_items(
     *,
     kind: str,
 ) -> list[Locator]:
-    """Open one picker and return only options causally scoped to that popup."""
+    """Open one picker and return only options that can be tied to that control."""
     await _close_popup(page)
     await _mark_currently_visible(page, selector, _PREEXISTING_OPTION_MARKER)
     await _mark_currently_visible(page, _POPUP_SCOPE_SELECTOR, _PREEXISTING_POPUP_MARKER)
@@ -225,16 +303,20 @@ async def _opened_option_items(
         if controlled:
             return await _matching_items(controlled[0], selector, kind=kind)
 
-        opened_scopes = await _new_popup_scopes(page, selector, kind=kind)
+        opened_scopes = [
+            scope
+            for scope in await _new_popup_scopes(page, selector, kind=kind)
+            if await _is_surface_near_picker(page, picker, scope)
+        ]
         if len(opened_scopes) > 1:
             raise AdapterMismatch(f"ChatGPT {kind} picker opened multiple matching popups")
         if opened_scopes:
             return await _matching_items(opened_scopes[0], selector, kind=kind)
 
-        # Some current ChatGPT variants expose no accessible popup container.
-        # In that case accept only option nodes that became visible because this
-        # picker was clicked. Anything already visible elsewhere in the app (for
-        # example chat-history/sidebar menuitems) is explicitly excluded.
+        # Provider variants without an accessible popup container are accepted
+        # only when newly revealed options are close to the picker and outside
+        # sidebar/history surfaces. Virtualized chat-history nodes therefore
+        # cannot become model/effort choices merely because they appeared later.
         items = page.locator(selector)
         revealed: list[Locator] = []
         for index in range(await items.count()):
@@ -247,8 +329,13 @@ async def _opened_option_items(
             except Exception:
                 continue
             matched = await (_matches_model_option(item) if kind == "model" else _matches_effort_option(item))
-            if matched:
+            if matched and await _is_surface_near_picker(page, picker, item):
                 revealed.append(item)
+
+        if not revealed:
+            raise AdapterMismatch(
+                f"ChatGPT {kind} picker opened without a safely scoped option surface"
+            )
         return revealed
     finally:
         await _clear_marker(page, _PREEXISTING_OPTION_MARKER)
@@ -258,7 +345,7 @@ async def _opened_option_items(
 class ChatGPTAdapter(_BaseChatGPTAdapter):
     """Current ChatGPT adapter with resilient, evidence-based picker discovery."""
 
-    adapter_version = "1.2.2"
+    adapter_version = "1.2.3"
 
     async def _model_picker(self, page: Page) -> Locator:
         picker = await self._first_visible(page, _MODEL_PICKER_SELECTORS)
