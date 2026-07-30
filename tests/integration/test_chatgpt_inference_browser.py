@@ -13,15 +13,15 @@ HTML = r'''<!doctype html>
 <body>
   <div data-testid="composer"><textarea id="prompt-textarea"></textarea></div>
 
-  <button data-testid="model-switcher-dropdown-button" aria-haspopup="menu">GPT-5.6 Sol</button>
-  <div id="model-menu" hidden>
+  <button data-testid="model-switcher-dropdown-button" aria-haspopup="menu" aria-controls="model-menu">GPT-5.6 Sol</button>
+  <div id="model-menu" role="menu" hidden>
     <button role="menuitemradio" data-testid="model-switcher-gpt-5-6-sol" aria-checked="true">GPT-5.6 Sol</button>
     <button role="menuitemradio" data-testid="model-switcher-gpt-5-6-pro" aria-checked="false">GPT-5.6 Pro</button>
     <button role="menuitem">Configure</button>
   </div>
 
-  <button data-testid="intelligence-picker" aria-haspopup="menu">Medium</button>
-  <div id="effort-menu" hidden>
+  <button data-testid="intelligence-picker" aria-haspopup="menu" aria-controls="effort-menu">Medium</button>
+  <div id="effort-menu" role="menu" hidden>
     <button role="menuitemradio" data-effort="medium" aria-checked="true">Medium</button>
     <button role="menuitemradio" data-effort="high" aria-checked="false">High</button>
     <button role="menuitemradio" data-effort="xhigh" aria-checked="false">Extra High</button>
