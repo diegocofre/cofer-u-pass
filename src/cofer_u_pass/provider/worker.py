@@ -48,17 +48,43 @@ class BridgeWorker:
         self.worker_id = worker_id or f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
         self.headers = {"Authorization": f"Bearer {token}"}
 
+    async def _profile_registration(self, profile_id: str) -> dict[str, Any]:
+        profile = await self.service.profile_status(profile_id, verify=False)
+        # Profile registration describes the authenticated route itself. Do not
+        # resolve capabilities through a public model id because a real model
+        # may legitimately share the same string as a legacy profile alias.
+        caps = self.provider._capability_payload(profile.provider, None)
+        snapshot = await self.provider.profile_catalog(profile_id)
+        models: list[dict[str, Any]] = []
+        catalog_updated_at: str | None = None
+        catalog_error: str | None = None
+        if snapshot is not None:
+            catalog_updated_at = snapshot.updated_at.isoformat()
+            catalog_error = snapshot.error
+            if snapshot.error is None:
+                for model in snapshot.models:
+                    models.append({
+                        "id": model.id,
+                        "display_name": model.display_name,
+                        "reasoning_efforts": list(model.supported_efforts),
+                    })
+        return {
+            # Keep the existing registration fields so older bridge versions can
+            # continue leasing by profile while newer bridges can expose models.
+            "profile_id": profile_id,
+            "provider": profile.provider,
+            "status": profile.status,
+            "capabilities": caps,
+            "models": models,
+            "catalog_updated_at": catalog_updated_at,
+            "catalog_error": catalog_error,
+        }
+
     async def _register(self, client: httpx.AsyncClient) -> None:
-        profile_payload = []
-        for profile_id in self.profiles:
-            profile = await self.service.profile_status(profile_id, verify=False)
-            caps = await self.provider.model_capabilities(profile_id)
-            profile_payload.append({
-                "profile_id": profile_id,
-                "provider": profile.provider,
-                "status": profile.status,
-                "capabilities": caps["capabilities"],
-            })
+        profile_payload = [
+            await self._profile_registration(profile_id)
+            for profile_id in self.profiles
+        ]
         response = await client.post(
             f"{self.bridge_url}/internal/v1/workers/register",
             headers=self.headers,
@@ -93,6 +119,7 @@ class BridgeWorker:
             path = Path(path_value)
             if not path.is_file():
                 continue
+
             async def content_stream():
                 with path.open("rb") as handle:
                     while True:

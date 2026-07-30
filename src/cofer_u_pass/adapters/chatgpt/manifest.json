@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
   "provider": "chatgpt",
-  "adapter_version": "1.1.0",
+  "adapter_version": "1.2.0",
   "engine_contract": "1.0",
-  "rule_version": "1.1.0",
+  "rule_version": "1.2.0",
   "rule_schema_version": "1.0",
   "capabilities": [
     "conversation.new",
@@ -12,7 +12,11 @@
     "message.send",
     "response.stream",
     "attachment.upload",
-    "artifact.download"
+    "artifact.download",
+    "inference.model.discover",
+    "inference.model.select",
+    "inference.effort.select",
+    "inference.state.verify"
   ],
   "allowed_origins": [
     "https://chatgpt.com"

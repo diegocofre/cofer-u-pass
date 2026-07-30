@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0 - 2026-07-28
+
+- Separate authenticated browser profiles from public inference identity: restricted provider requests now use discovered provider `model` ids plus optional `reasoning.effort`.
+- Add provider-neutral inference domain types and first-class `configure_inference` execution actions.
+- Enforce verified inference configuration before `send_message`; unsupported or unverifiable model/effort selections fail closed without silent fallback.
+- Implement dynamic ChatGPT Web model discovery, intelligence/effort discovery, model selection, effort selection, and effective-state verification.
+- Add normalized public effort support for `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`, while retaining provider-native labels in evidence.
+- Add a rebuildable per-profile model catalog outside authoritative SQLite state, with explicit refresh and stale/error handling.
+- Change `/v1/models` to advertise discovered provider models and effort metadata rather than browser profile ids.
+- Retain the v1.1 profile-id-as-model form temporarily as an unadvertised legacy alias when no `reasoning.effort` is requested.
+- Extend worker registration additively with profile model catalogs and reasoning-effort metadata while preserving profile-based leasing fields.
+- Add `cofer-u-pass profiles models PROFILE [--refresh]` for catalog inspection and rediscovery; CLI authentication performs a best-effort post-auth catalog refresh.
+- Add deterministic inference contract tests, controlled Chromium ChatGPT picker tests, worker/catalog/API regression coverage, and a supervised ChatGPT model+effort smoke gate.
+- Add the model catalog/manual validation runbook and update provider/compatibility documentation for Stage 1.
+
 ## 1.1.0 - 2026-07-28
 
 - Add restricted OpenAI-compatible provider mode for authenticated web profiles through `/v1/responses` and `/v1/files`.
@@ -9,7 +24,7 @@
 - Add provider-generated artifact and ZIP validation, including required bundle-member checks.
 - Add a persistent provider file store for files uploaded before a run.
 - Add `cofer-u-pass worker` for an outbound, authenticated connection to a Cofer One IA bridge; browser profiles and cookies remain local to the host.
-- Stream bridge input/output files in bounded chunks and keep worker heartbeats alive during long browser tasks.
+- Stream bridge input/output files in bounded chunks and keep worker heartbeats alive during long web tasks.
 - Expand ChatGPT artifact locators for downloadable sandbox/backend file links.
 - Add provider/file/exchange/worker/API regression coverage.
 - Remove stale committed 1.0.6 build artifacts; v1.1 release wheel/sdist are built and validated from source instead of leaving mismatched binaries in the tree.

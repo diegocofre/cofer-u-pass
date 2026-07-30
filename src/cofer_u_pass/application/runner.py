@@ -32,8 +32,8 @@ from cofer_u_pass.domain.models import (
     Block,
     CanonicalResult,
     Checkpoint,
-    ConversationMode,
     FailureClass,
+    InferenceSelection,
     RunState,
 )
 from cofer_u_pass.hooks.runner import HookRunner
@@ -118,6 +118,7 @@ class RunExecutor:
         if not checkpoint.artifact_ids:
             return
         import hashlib
+
         items = {item["artifact_id"]: item for item in await self.db.list_artifacts(run_id)}
         for artifact_id in checkpoint.artifact_ids:
             item = items.get(artifact_id)
@@ -241,11 +242,16 @@ class RunExecutor:
                         "hook_results": persisted_hook_results,
                         "conversation_id": run.conversation_id,
                         "last_confirmed": None,
+                        "inference": None,
+                        "inference_required": any(row.get("type") == "configure_inference" for row in actions),
                     }
                     for ordinal, row in enumerate(actions):
                         action = ActionPlan.model_validate(row["plan"])
                         if row["state"] == ActionState.CONFIRMED.value:
-                            state["last_confirmed"] = {"action_type": action.type, "evidence": row.get("evidence", {})}
+                            evidence = row.get("evidence", {})
+                            state["last_confirmed"] = {"action_type": action.type, "evidence": evidence}
+                            if action.type == "configure_inference" and evidence.get("verified") is True:
+                                state["inference"] = evidence
                             continue
                         if action.type != "open_conversation":
                             await adapter.ensure_authenticated(browser.page)
@@ -290,7 +296,6 @@ class RunExecutor:
         max_attempts = action.retry.max_attempts
         for attempt in range(1, max_attempts + 1):
             await self.db.update_action(run.run_id, action.action_id, ActionState.STARTED, attempt=attempt, event_type="action.started")
-            effect_possible = False
             try:
                 evidence = await asyncio.wait_for(
                     self._perform_action(run, page, adapter, action, ordinal, state),
@@ -311,9 +316,8 @@ class RunExecutor:
                 state["last_confirmed"] = {"action_type": action.type, "evidence": evidence}
                 return
             except AdapterActionError as exc:
-                effect_possible = exc.external_effect_possible
                 failure_class = exc.failure_class
-                if effect_possible and action.external_effects:
+                if exc.external_effect_possible and action.external_effects:
                     await self.db.update_action(
                         run.run_id, action.action_id, ActionState.OUTCOME_UNKNOWN,
                         attempt=attempt, error_class=FailureClass.OUTCOME_UNKNOWN, error_message=str(exc), evidence={},
@@ -333,7 +337,6 @@ class RunExecutor:
                 raise
             except TransientFailure as exc:
                 if action.external_effects:
-                    # The adapter did not explicitly prove the external effect was absent.
                     await self.db.update_action(
                         run.run_id, action.action_id, ActionState.OUTCOME_UNKNOWN,
                         attempt=attempt, error_class=FailureClass.OUTCOME_UNKNOWN, error_message=str(exc), evidence={},
@@ -390,11 +393,31 @@ class RunExecutor:
             )
             return evidence.data
 
+        if action.type == "configure_inference":
+            selection = InferenceSelection.model_validate(action.inputs)
+            if "inference.model.select" not in adapter.capabilities:
+                raise ProtocolError(f"adapter {adapter.provider} does not support model selection")
+            if selection.effort is not None and "inference.effort.select" not in adapter.capabilities:
+                raise ProtocolError(f"adapter {adapter.provider} does not support reasoning effort selection")
+            evidence = (await adapter.configure_inference(page, selection)).data
+            if evidence.get("verified") is not True:
+                raise AdapterMismatch("adapter did not verify requested inference state")
+            if evidence.get("effective_model") != selection.model:
+                raise AdapterMismatch("adapter effective model does not match requested model")
+            if selection.effort is not None and evidence.get("effective_effort") != selection.effort:
+                raise AdapterMismatch("adapter effective effort does not match requested effort")
+            state["inference"] = evidence
+            return evidence
+
         if action.type == "attach_files":
             paths = [self.artifacts.validate_input(Path(p)) for p in action.inputs.get("files", [])]
             return (await adapter.attach_files(page, paths)).data
 
         if action.type == "send_message":
+            if state.get("inference_required"):
+                inference = state.get("inference")
+                if not isinstance(inference, dict) or inference.get("verified") is not True:
+                    raise ProtocolError("inference configuration must be verified before send_message")
             text = action.inputs.get("text")
             if not isinstance(text, str) or not text.strip():
                 raise ProtocolError("send_message requires non-empty params.text")
@@ -409,6 +432,7 @@ class RunExecutor:
         if action.type == "capture_response":
             async def emit(kind: str, payload: dict[str, Any]) -> None:
                 await self.db.append_event(run.run_id, kind, payload)
+
             block, evidence = await adapter.capture_response(
                 page,
                 timeout_seconds=action.timeout_seconds,
@@ -449,10 +473,13 @@ class RunExecutor:
         if action.type == "finalize":
             block = state.get("block") or Block(type="document", children=[])
             artifacts = state.get("artifacts", [])
+            metadata: dict[str, Any] = {"hook_results": state.get("hook_results", [])}
+            if state.get("inference") is not None:
+                metadata["inference"] = state["inference"]
             result = CanonicalResult(
                 run_id=run.run_id, blocks=block, markdown=block_to_markdown(block), text=block_to_text(block),
                 artifacts=artifacts, provider=run.provider, profile_id=run.profile_id,
-                conversation_id=state.get("conversation_id"), metadata={"hook_results": state.get("hook_results", [])},
+                conversation_id=state.get("conversation_id"), metadata=metadata,
             )
             await self.db.store_result(result)
             await self.db.append_event(run.run_id, "result.available", {"run_id": run.run_id})
