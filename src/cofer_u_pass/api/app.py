@@ -49,7 +49,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         finally:
             await service.shutdown(cooperative=True)
 
-    app = FastAPI(title="Cofer U Pass", version="1.2.0", lifespan=lifespan)
+    app = FastAPI(title="Cofer U Pass", version="1.2.1", lifespan=lifespan)
     app.state.service = service
     if cfg.api.cors_origins:
         app.add_middleware(
