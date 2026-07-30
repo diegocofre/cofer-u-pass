@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.6 - 2026-07-30
+
+- Make managed Playwright cleanup tolerate an already-closed page, context, browser, or driver connection instead of replacing the provider/navigation failure that caused the shutdown.
+- Preserve unexpected cleanup failures: the context and Playwright stop paths are both attempted, and the first unexpected error is still propagated with additional cleanup failures attached as notes.
+- Add unit coverage for the live `BrowserContext.close: Connection closed while reading from the driver` failure and for unexpected cleanup-error propagation.
+- Keep ChatGPT picker discovery and the 1.2.5 safe diagnostics unchanged; this patch only makes the next supervised refresh expose the original failure instead of a secondary close exception.
+- Bump the package and ChatGPT adapter version to `1.2.6`; declarative `rule_version` remains `1.2.0` because `rules.json` is unchanged.
+
 ## 1.2.5 - 2026-07-30
 
 - Preserve the fail-closed ChatGPT picker behavior from 1.2.4 and add bounded diagnostics when the live model picker cannot be recognized.
