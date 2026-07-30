@@ -255,13 +255,13 @@ async def _new_popup_scopes(page: Page, selector: str, *, kind: str) -> list[Loc
     return matches
 
 
-async def _is_option_near_picker(page: Page, picker: Locator, item: Locator) -> bool:
-    """Reject newly materialized global items unless they are spatially close to the picker."""
-    if await _is_sidebar_like(item):
+async def _is_surface_near_picker(page: Page, picker: Locator, surface: Locator) -> bool:
+    """Reject unowned surfaces unless they are spatially close to the picker."""
+    if await _is_sidebar_like(surface):
         return False
     try:
         picker_box = await picker.bounding_box()
-        item_box = await item.bounding_box()
+        item_box = await surface.bounding_box()
         if not picker_box or not item_box:
             return False
 
@@ -303,7 +303,11 @@ async def _opened_option_items(
         if controlled:
             return await _matching_items(controlled[0], selector, kind=kind)
 
-        opened_scopes = await _new_popup_scopes(page, selector, kind=kind)
+        opened_scopes = [
+            scope
+            for scope in await _new_popup_scopes(page, selector, kind=kind)
+            if await _is_surface_near_picker(page, picker, scope)
+        ]
         if len(opened_scopes) > 1:
             raise AdapterMismatch(f"ChatGPT {kind} picker opened multiple matching popups")
         if opened_scopes:
@@ -325,7 +329,7 @@ async def _opened_option_items(
             except Exception:
                 continue
             matched = await (_matches_model_option(item) if kind == "model" else _matches_effort_option(item))
-            if matched and await _is_option_near_picker(page, picker, item):
+            if matched and await _is_surface_near_picker(page, picker, item):
                 revealed.append(item)
 
         if not revealed:
