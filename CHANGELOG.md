@@ -84,3 +84,10 @@
 Initial public v1 implementation.
 
 - Shared async application service behind Python, CLI, and HTTP/SSE interfaces.
+- Versioned protocol, event, block, adapter-rule, run, and configuration schemas.
+- SQLite WAL persistence, immutable plans, actions, events, checkpoints, leases, backups, and conservative restart recovery.
+- Playwright-managed Chromium with persistent profiles and manual authentication.
+- Official `generic`, ChatGPT, Gemini, and DeepSeek adapters.
+- DOM-based response streaming and canonical block output.
+- File attachments, artifact hashing/storage, typed local hooks, Doctor, diagnostics, update workflow, and loopback bearer-authenticated API.
+- Windows/Linux operational runbook and deterministic/unit/contract/integration/smoke test layers.
