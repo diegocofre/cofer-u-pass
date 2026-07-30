@@ -75,6 +75,10 @@ function closeMenus() { modelMenu.hidden = true; effortMenu.hidden = true; }
 function materializeSidebarNoise() {
   virtualizedHistory.replaceChildren();
 
+  const fakeMenu = document.createElement('div');
+  fakeMenu.className = 'history-menu';
+  fakeMenu.setAttribute('role', 'menu');
+
   const fakeModel = document.createElement('button');
   fakeModel.className = 'history';
   fakeModel.setAttribute('role', 'menuitemradio');
@@ -87,7 +91,8 @@ function materializeSidebarNoise() {
   fakeEffort.textContent = 'High';
   fakeEffort.onclick = () => { window.sidebarClicks += 1; };
 
-  virtualizedHistory.append(fakeModel, fakeEffort);
+  fakeMenu.append(fakeModel, fakeEffort);
+  virtualizedHistory.append(fakeMenu);
 }
 
 modelButton.onclick = () => {
