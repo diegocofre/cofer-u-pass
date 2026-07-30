@@ -30,6 +30,22 @@ def origin(url: str) -> str:
     return f"{parts.scheme}://{netloc}"
 
 
+def _is_already_closed_error(exc: BaseException) -> bool:
+    """Recognize expected cleanup failures after the Playwright driver/browser exited."""
+    message = str(exc).casefold()
+    return any(
+        marker in message
+        for marker in (
+            "connection closed while reading from the driver",
+            "target page, context or browser has been closed",
+            "browser has been closed",
+            "context has been closed",
+            "page has been closed",
+            "playwright connection closed",
+        )
+    )
+
+
 class ManagedBrowser:
     def __init__(self, playwright: Playwright, context: BrowserContext, page: Page):
         self.playwright = playwright
@@ -37,10 +53,29 @@ class ManagedBrowser:
         self.page = page
 
     async def close(self) -> None:
+        """Close browser resources without masking an earlier provider/navigation failure."""
+        unexpected: list[BaseException] = []
+
         try:
             await self.context.close()
-        finally:
+        except BaseException as exc:
+            if not _is_already_closed_error(exc):
+                unexpected.append(exc)
+
+        try:
             await self.playwright.stop()
+        except BaseException as exc:
+            if not _is_already_closed_error(exc):
+                unexpected.append(exc)
+
+        if unexpected:
+            primary = unexpected[0]
+            for extra in unexpected[1:]:
+                try:
+                    primary.add_note(f"Additional browser cleanup failure: {type(extra).__name__}: {extra}")
+                except Exception:
+                    pass
+            raise primary
 
 
 class BrowserRuntime:
