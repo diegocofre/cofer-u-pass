@@ -43,6 +43,7 @@ HTML = r'''<!doctype html>
       </div>
     </div>
     <div data-model="account-default" data-mode="auto-routing">Provider routing state</div>
+    <div data-testid="model-response">PRIVATE CURRENT CHAT CONTENT</div>
   </main>
 
 <script>
@@ -98,9 +99,10 @@ async def test_chatgpt_model_picker_failure_captures_effort_menu_without_selecti
             assert "data-mode='auto-routing'" in message
             assert "SECRET GPT-5.6 Pro CHAT" not in message
             assert "/c/secret-conversation" not in message
+            assert "PRIVATE CURRENT CHAT CONTENT" not in message
             assert await page.evaluate("window.effortPickerClicks") == 1
             assert await page.evaluate("window.effortOptionClicks") == 0
-            assert await page.locator('#effort-menu').is_hidden()
+            assert await page.locator("#effort-menu").is_hidden()
         finally:
             await browser.close()
     finally:
