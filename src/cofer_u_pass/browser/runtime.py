@@ -72,7 +72,10 @@ class ManagedBrowser:
             primary = unexpected[0]
             for extra in unexpected[1:]:
                 try:
-                    primary.add_note(f"Additional browser cleanup failure: {type(extra).__name__}: {extra}")
+                    primary.add_note(
+                        "Additional browser cleanup failure: "
+                        f"{type(extra).__name__}: {extra}"
+                    )
                 except Exception:
                     pass
             raise primary
