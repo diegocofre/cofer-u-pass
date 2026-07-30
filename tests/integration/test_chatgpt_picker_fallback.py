@@ -14,6 +14,7 @@ HTML = r'''<!doctype html>
     <button role="menuitem" class="history">Comparison GPT-5.6 Thinking vs Claude</button>
     <button role="menuitem" class="history">GPT-5.6 Pro migration notes</button>
     <button role="menuitem" class="history">High priority project</button>
+    <button class="history" aria-haspopup="menu">High</button>
   </aside>
 
   <main>
@@ -26,7 +27,7 @@ HTML = r'''<!doctype html>
       <button role="menuitemradio" data-testid="model-switcher-gpt-5-6-pro" aria-checked="false">GPT-5.6 Pro</button>
     </div>
 
-    <button data-testid="intelligence-picker">Medium</button>
+    <button id="effort-trigger" aria-haspopup="menu">Medium</button>
     <div id="effort-menu" hidden>
       <button role="menuitemradio" aria-checked="true">Medium</button>
       <button role="menuitemradio" aria-checked="false">High</button>
@@ -40,7 +41,7 @@ document.querySelectorAll('#sidebar .history').forEach(item => {
 });
 
 const modelButton = document.querySelector('#model-trigger');
-const effortButton = document.querySelector('[data-testid="intelligence-picker"]');
+const effortButton = document.querySelector('#effort-trigger');
 const modelMenu = document.querySelector('#model-menu');
 const effortMenu = document.querySelector('#effort-menu');
 
@@ -88,6 +89,9 @@ async def test_chatgpt_scopes_fallback_picker_options_to_newly_revealed_menu_ite
 
             picker = await adapter._model_picker(page)
             assert await picker.get_attribute("id") == "model-trigger"
+            effort_picker = await adapter._effort_picker(page)
+            assert effort_picker is not None
+            assert await effort_picker.get_attribute("id") == "effort-trigger"
 
             models = await adapter.discover_models(page)
             assert [model.id for model in models] == ["gpt-5.6-sol", "gpt-5.6-pro"]
