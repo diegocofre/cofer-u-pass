@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.5 - 2026-07-30
+
+- Preserve the fail-closed ChatGPT picker behavior from 1.2.4 and add bounded diagnostics when the live model picker cannot be recognized.
+- Capture only visible interactive-control metadata near the composer: tag, role, test id, ARIA picker attributes, title, bounded text, geometry, distance, and composer locality.
+- Exclude `data-sidebar-item`, `/c/...` conversation links, sidebar/history surfaces, and href values from picker diagnostics so the failure report is useful without dumping conversation navigation data.
+- Route the registry through a diagnostic ChatGPT wrapper without changing the underlying 1.2.4 selection/discovery algorithm.
+- Bump the package and ChatGPT adapter version to `1.2.5`; declarative `rule_version` remains `1.2.0` because `rules.json` is unchanged.
+
 ## 1.2.4 - 2026-07-30
 
 - Replace Playwright inference-control clicks with a guarded hit-test path that refuses to auto-scroll an offscreen target and never clicks when `elementFromPoint()` resolves to another surface.
