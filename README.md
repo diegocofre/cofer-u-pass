@@ -48,6 +48,7 @@ cofer-u-pass chat --profile my-chatgpt
 ## Restricted provider mode
 
 The restricted OpenAI-compatible surface separates authentication from inference identity:
+
 - `profile`: internal authenticated browser/account route;
 - `model`: discovered provider model;
 - `reasoning.effort`: normalized reasoning/intelligence request;
