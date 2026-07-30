@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from cofer_u_pass import __version__
 from cofer_u_pass.application.service import ApplicationService
 from cofer_u_pass.config.settings import AppConfig, load_config
 from cofer_u_pass.domain.errors import ProtocolError
@@ -49,7 +50,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         finally:
             await service.shutdown(cooperative=True)
 
-    app = FastAPI(title="Cofer U Pass", version="1.2.1", lifespan=lifespan)
+    app = FastAPI(title="Cofer U Pass", version=__version__, lifespan=lifespan)
     app.state.service = service
     if cfg.api.cors_origins:
         app.add_middleware(
