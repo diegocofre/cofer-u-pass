@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 - 2026-07-30
+
+- Make ChatGPT model-picker discovery resilient to current web variants that render the picker without `aria-haspopup` or the historical dropdown `data-testid`.
+- Keep model selection fail-closed by requiring positive semantic evidence and rejecting menu rows/options as picker candidates.
+- Add controlled Chromium regression coverage for a `role=button` model picker with no popup metadata, including a nearby misleading `Upgrade to GPT-5.6 Pro` button that must not be selected.
+
 ## 1.2.0 - 2026-07-28
 
 - Separate authenticated browser profiles from public inference identity: restricted provider requests now use discovered provider `model` ids plus optional `reasoning.effort`.
@@ -78,10 +84,3 @@
 Initial public v1 implementation.
 
 - Shared async application service behind Python, CLI, and HTTP/SSE interfaces.
-- Versioned protocol, event, block, adapter-rule, run, and configuration schemas.
-- SQLite WAL persistence, immutable plans, actions, events, checkpoints, leases, backups, and conservative restart recovery.
-- Playwright-managed Chromium with persistent profiles and manual authentication.
-- Official `generic`, ChatGPT, Gemini, and DeepSeek adapters.
-- DOM-based response streaming and canonical block output.
-- File attachments, artifact hashing/storage, typed local hooks, Doctor, diagnostics, update workflow, and loopback bearer-authenticated API.
-- Windows/Linux operational runbook and deterministic/unit/contract/integration/smoke test layers.
