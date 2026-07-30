@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Diego Cofre" }]
+authors = [{ name = "Diego Cofré" }]
 keywords = ["playwright", "automation", "chatgpt", "gemini", "deepseek", "sse"]
 classifiers = [
   "Development Status :: 4 - Beta",
