@@ -10,7 +10,7 @@ from cofer_u_pass.adapters.base import AdapterManifest, AdapterRules, ProviderAd
 class AdapterRegistry:
     def __init__(self):
         from cofer_u_pass.adapters.generic.adapter import GenericAdapter
-        from cofer_u_pass.adapters.chatgpt.adapter import ChatGPTAdapter
+        from cofer_u_pass.adapters.chatgpt import ChatGPTAdapter
         from cofer_u_pass.adapters.gemini.adapter import GeminiAdapter
         from cofer_u_pass.adapters.deepseek.adapter import DeepSeekAdapter
         self._types: dict[str, Type[ProviderAdapter]] = {
