@@ -7,7 +7,7 @@ Official adapters: `generic`, `chatgpt`, `gemini`, and `deepseek`. In v1.2, Chat
 ## Install
 
 ```bash
-uv tool install cofer-u-pass==1.2.0
+uv tool install cofer-u-pass==1.2.1
 cofer-u-pass setup
 cofer-u-pass doctor
 ```
@@ -15,7 +15,7 @@ cofer-u-pass doctor
 or:
 
 ```bash
-pipx install cofer-u-pass==1.2.0
+pipx install cofer-u-pass==1.2.1
 cofer-u-pass setup
 ```
 
@@ -48,7 +48,6 @@ cofer-u-pass chat --profile my-chatgpt
 ## Restricted provider mode
 
 The restricted OpenAI-compatible surface separates authentication from inference identity:
-
 - `profile`: internal authenticated browser/account route;
 - `model`: discovered provider model;
 - `reasoning.effort`: normalized reasoning/intelligence request;
