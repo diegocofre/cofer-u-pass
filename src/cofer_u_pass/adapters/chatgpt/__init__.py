@@ -10,6 +10,7 @@ from .adapter import (
     ChatGPTAdapter as _BaseChatGPTAdapter,
     _Choice,
     _EFFORT_OPTION_SELECTOR,
+    _EFFORT_PICKER_SELECTORS,
     _MODEL_OPTION_SELECTOR,
     _MODEL_PICKER_SELECTORS,
     _MODEL_TESTID_EXCLUSIONS,
@@ -27,6 +28,11 @@ _MODEL_PICKER_FALLBACK_SELECTORS = (
     "[role='button'][aria-label*='model' i]",
     "main button",
     "main [role='button']",
+)
+
+_EFFORT_PICKER_FALLBACK_SELECTORS = (
+    "main button[aria-haspopup]",
+    "main [role='button'][aria-haspopup]",
 )
 
 _POPUP_SCOPE_SELECTOR = "[role='menu'], [role='listbox']"
@@ -68,6 +74,32 @@ async def _is_model_picker_candidate(candidate: Locator) -> bool:
     except Exception:
         in_main = False
     return in_main and _headline(label).casefold() == _headline(parsed[1]).casefold()
+
+
+async def _is_effort_picker_candidate(candidate: Locator) -> bool:
+    """Accept strong effort controls globally and weak text evidence only in main."""
+    try:
+        role = (await candidate.get_attribute("role") or "").strip().lower()
+        if role in {"menuitem", "menuitemradio", "option"}:
+            return False
+
+        native_id = (await candidate.get_attribute("data-testid") or "").strip()
+        aria_label = (await candidate.get_attribute("aria-label") or "").strip()
+        label = await _locator_label(candidate)
+    except Exception:
+        return False
+
+    structural = f"{native_id} {aria_label}".lower()
+    if any(token in structural for token in ("intelligence", "reasoning", "thinking", "effort")):
+        return True
+
+    if _normalize_effort(label) is None and _normalize_effort(native_id) is None:
+        return False
+
+    try:
+        return bool(await candidate.evaluate("element => Boolean(element.closest('main'))"))
+    except Exception:
+        return False
 
 
 def _css_attr_value(value: str) -> str:
@@ -250,6 +282,28 @@ class ChatGPTAdapter(_BaseChatGPTAdapter):
                     return candidate
 
         raise AdapterMismatch("ChatGPT model picker could not be located")
+
+    async def _effort_picker(self, page: Page) -> Locator | None:
+        picker = await self._first_visible(page, _EFFORT_PICKER_SELECTORS)
+        if picker is not None and await _is_effort_picker_candidate(picker):
+            return picker
+
+        for selector in _EFFORT_PICKER_FALLBACK_SELECTORS:
+            candidates = page.locator(selector)
+            try:
+                count = await candidates.count()
+            except Exception:
+                continue
+            for index in range(count):
+                candidate = candidates.nth(index)
+                try:
+                    if not await candidate.is_visible():
+                        continue
+                except Exception:
+                    continue
+                if await _is_effort_picker_candidate(candidate):
+                    return candidate
+        return None
 
     async def _model_options(self, page: Page) -> list[_Choice]:
         picker = await self._model_picker(page)
