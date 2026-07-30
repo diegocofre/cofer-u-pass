@@ -9,26 +9,29 @@ from cofer_u_pass.adapters.registry import AdapterRegistry
 HTML = r'''<!doctype html>
 <html>
 <body>
-  <div data-testid="composer"><textarea id="prompt-textarea"></textarea></div>
-
   <aside id="sidebar">
+    <button class="history">GPT-5.6 Pro</button>
     <button role="menuitem" class="history">Comparison GPT-5.6 Thinking vs Claude</button>
     <button role="menuitem" class="history">GPT-5.6 Pro migration notes</button>
     <button role="menuitem" class="history">High priority project</button>
   </aside>
 
-  <button id="upgrade">Upgrade to GPT-5.6 Pro</button>
-  <div id="model-trigger" role="button" tabindex="0">GPT-5.6 Sol</div>
-  <div id="model-menu" hidden>
-    <button role="menuitemradio" data-testid="model-switcher-gpt-5-6-sol" aria-checked="true">GPT-5.6 Sol</button>
-    <button role="menuitemradio" data-testid="model-switcher-gpt-5-6-pro" aria-checked="false">GPT-5.6 Pro</button>
-  </div>
+  <main>
+    <div data-testid="composer"><textarea id="prompt-textarea"></textarea></div>
 
-  <button data-testid="intelligence-picker">Medium</button>
-  <div id="effort-menu" hidden>
-    <button role="menuitemradio" aria-checked="true">Medium</button>
-    <button role="menuitemradio" aria-checked="false">High</button>
-  </div>
+    <button id="upgrade">Upgrade to GPT-5.6 Pro</button>
+    <div id="model-trigger" role="button" tabindex="0">GPT-5.6 Sol</div>
+    <div id="model-menu" hidden>
+      <button role="menuitemradio" data-testid="model-switcher-gpt-5-6-sol" aria-checked="true">GPT-5.6 Sol</button>
+      <button role="menuitemradio" data-testid="model-switcher-gpt-5-6-pro" aria-checked="false">GPT-5.6 Pro</button>
+    </div>
+
+    <button data-testid="intelligence-picker">Medium</button>
+    <div id="effort-menu" hidden>
+      <button role="menuitemradio" aria-checked="true">Medium</button>
+      <button role="menuitemradio" aria-checked="false">High</button>
+    </div>
+  </main>
 
 <script>
 window.sidebarClicks = 0;
