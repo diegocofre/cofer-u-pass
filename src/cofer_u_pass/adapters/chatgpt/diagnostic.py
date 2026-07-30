@@ -251,7 +251,7 @@ async def _visible_model_mode_metadata(page: Page) -> list[dict[str, object]]:
                         dataModel: element.getAttribute('data-model'),
                     };
                     const haystack = Object.values(attrs).filter(Boolean).join(' ');
-                    if (!tokens.test(haystack)) continue;
+                    if (!attrs.dataModel && !attrs.dataMode && !tokens.test(haystack)) continue;
 
                     const row = {
                         tag: element.tagName ? element.tagName.toLowerCase() : null,
@@ -357,13 +357,17 @@ def _format_picker_diagnostics(rows: list[dict[str, object]]) -> str:
 
 
 async def _effort_menu_diagnostics(adapter: "ChatGPTAdapter", page: Page) -> str:
-    picker = await adapter._effort_picker(page)
+    try:
+        picker = await adapter._effort_picker(page)
+    except Exception as exc:
+        return f"Effort picker diagnostic failed safely: {type(exc).__name__}: {exc}"
     if picker is None:
         return "Effort picker diagnostic: no safely recognized effort picker."
 
     picker_row = await _describe_control(picker)
     recognized: list[str] = []
-    failure: str | None = None
+    discovery_failure: str | None = None
+    cleanup_failure: str | None = None
     raw_items: list[dict[str, object]] = []
     try:
         try:
@@ -374,10 +378,13 @@ async def _effort_menu_diagnostics(adapter: "ChatGPTAdapter", page: Page) -> str
                 for choice in choices
             ]
         except Exception as exc:
-            failure = f"{type(exc).__name__}: {exc}"
+            discovery_failure = f"{type(exc).__name__}: {exc}"
         raw_items = await _visible_effort_menu_items(page, picker)
     finally:
-        await _close_popup(page)
+        try:
+            await _close_popup(page)
+        except Exception as exc:
+            cleanup_failure = f"{type(exc).__name__}: {exc}"
 
     lines = ["Effort picker/menu diagnostic (no option selected):"]
     lines.append(
@@ -390,8 +397,10 @@ async def _effort_menu_diagnostics(adapter: "ChatGPTAdapter", page: Page) -> str
     lines.append(
         "recognized_efforts: " + (", ".join(recognized) if recognized else "none")
     )
-    if failure:
-        lines.append(f"effort_option_discovery_error: {failure}")
+    if discovery_failure:
+        lines.append(f"effort_option_discovery_error: {discovery_failure}")
+    if cleanup_failure:
+        lines.append(f"effort_popup_cleanup_error: {cleanup_failure}")
     lines.append("raw_visible_menu_items:")
     if raw_items:
         lines.extend(
@@ -445,13 +454,20 @@ class ChatGPTAdapter(_CurrentChatGPTAdapter):
         try:
             return await super()._model_picker(page)
         except AdapterMismatch as exc:
-            controls = await _nearby_interactive_controls(page)
-            effort = await _effort_menu_diagnostics(self, page)
-            model_metadata = await _visible_model_mode_metadata(page)
-            raise AdapterMismatch(
-                f"{exc}\n{_format_picker_diagnostics(controls)}\n"
-                f"{effort}\n{_format_model_mode_metadata(model_metadata)}"
-            ) from exc
+            try:
+                controls = await _nearby_interactive_controls(page)
+                effort = await _effort_menu_diagnostics(self, page)
+                model_metadata = await _visible_model_mode_metadata(page)
+                detail = (
+                    f"{_format_picker_diagnostics(controls)}\n{effort}\n"
+                    f"{_format_model_mode_metadata(model_metadata)}"
+                )
+            except Exception as diagnostic_exc:
+                detail = (
+                    "Diagnostic capture failed safely: "
+                    f"{type(diagnostic_exc).__name__}: {diagnostic_exc}"
+                )
+            raise AdapterMismatch(f"{exc}\n{detail}") from exc
 
 
 __all__ = ["ChatGPTAdapter"]
