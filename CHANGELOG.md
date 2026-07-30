@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.7 - 2026-07-30
+
+- Extend the safe ChatGPT model-picker failure report with a targeted inspection of the recognized reasoning-effort control and its open menu.
+- Open the effort picker once through the existing guarded hit-test path, capture normalized efforts plus bounded raw option metadata, select no option, and always close the popup.
+- Capture bounded visible `model`/`mode`/`reasoning` metadata outside sidebar/history surfaces to determine whether the current provider UI exposes model identity separately or combines it with another control.
+- Add controlled Chromium coverage proving effort options are observed without clicks and chat-history model names and conversation URLs are excluded.
+- Keep catalog publication fail-closed and do not synthesize a model when the provider UI exposes only an effort control.
+- Bump package and ChatGPT adapter metadata to `1.2.7`; declarative `rule_version` remains `1.2.0` because `rules.json` is unchanged.
+
 ## 1.2.6 - 2026-07-30
 
 - Make managed Playwright cleanup tolerate an already-closed page, context, browser, or driver connection instead of replacing the provider/navigation failure that caused the shutdown.
