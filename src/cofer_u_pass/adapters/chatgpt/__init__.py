@@ -22,7 +22,7 @@ _MODEL_PICKER_FALLBACK_SELECTORS = (
 
 
 async def _is_model_picker_candidate(candidate: Locator) -> bool:
-    """Accept only visible controls with positive evidence that they select a model."""
+    """Accept only controls with positive evidence that they select a model."""
     try:
         role = (await candidate.get_attribute("role") or "").strip().lower()
         if role in {"menuitem", "menuitemradio", "option"}:
@@ -34,16 +34,17 @@ async def _is_model_picker_candidate(candidate: Locator) -> bool:
     except Exception:
         return False
 
+    # Structural provider metadata is stronger than the current visible label.
+    # ChatGPT may display a mode such as "Instant" on the trigger and expose the
+    # actual model only after the picker opens.
+    if "model-switcher" in native_id.lower():
+        return True
+    if "model" in aria_label.lower():
+        return True
+
     parsed = _model_choice(label, native_id)
     if parsed is None:
         return False
-
-    native_lower = native_id.lower()
-    if "model-switcher" in native_lower:
-        return True
-
-    if "model" in aria_label.lower():
-        return True
 
     # Last-resort semantic fallback for current ChatGPT variants that render the
     # picker as an ordinary button/role=button with no popup or test-id metadata.
