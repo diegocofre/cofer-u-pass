@@ -14,8 +14,8 @@ INTERCEPTED_HTML = r'''<!doctype html>
   body { margin: 0; }
   main { position: relative; margin-left: 320px; padding: 80px; width: 700px; }
   [data-testid="composer"] { width: 600px; height: 80px; }
-  #model-trigger { position: absolute; left: 80px; top: 20px; width: 180px; height: 40px; }
-  #model-menu { position: absolute; left: 80px; top: 64px; width: 240px; }
+  #model-trigger { position: absolute; left: 80px; top: 100px; width: 180px; height: 40px; }
+  #model-menu { position: absolute; left: 80px; top: 144px; width: 240px; }
   #sidebar-interceptor {
     position: fixed;
     left: 400px;
