@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.4 - 2026-07-30
+
+- Replace Playwright inference-control clicks with a guarded hit-test path that refuses to auto-scroll an offscreen target and never clicks when `elementFromPoint()` resolves to another surface.
+- Treat ChatGPT's real `data-sidebar-item` and `/c/...` conversation links as explicit sidebar/history surfaces, based on the live failure trace from catalog refresh.
+- Fail closed with target/hit/sidebar diagnostics when a chat-history row intercepts a model or reasoning control, instead of letting Playwright retry and scroll the chat list.
+- Route model picker, model option, effort picker, effort option, and discovery/restoration clicks through the same safety gate.
+- Add controlled Chromium regression coverage reproducing an intercepting `<a data-sidebar-item="true" aria-label="Modelo de conversación" href="/c/...">` and requiring zero picker clicks.
+- Bump the ChatGPT adapter contract and package version to `1.2.4`; declarative `rule_version` remains `1.2.0` because `rules.json` is unchanged.
+
 ## 1.2.3 - 2026-07-30
 
 - Anchor weak ChatGPT model and reasoning-effort picker detection to the local composer surface instead of relying on a broad `<main>` boundary.

@@ -7,7 +7,7 @@ Official adapters: `generic`, `chatgpt`, `gemini`, and `deepseek`. In v1.2, Chat
 ## Install
 
 ```bash
-uv tool install cofer-u-pass==1.2.3
+uv tool install cofer-u-pass==1.2.4
 cofer-u-pass setup
 cofer-u-pass doctor
 ```
@@ -15,7 +15,7 @@ cofer-u-pass doctor
 or:
 
 ```bash
-pipx install cofer-u-pass==1.2.3
+pipx install cofer-u-pass==1.2.4
 cofer-u-pass setup
 ```
 
