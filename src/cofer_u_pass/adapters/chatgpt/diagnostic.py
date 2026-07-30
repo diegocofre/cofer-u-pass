@@ -148,7 +148,7 @@ def _format_picker_diagnostics(rows: list[dict[str, object]]) -> str:
 class ChatGPTAdapter(_CurrentChatGPTAdapter):
     """ChatGPT adapter with safe failure diagnostics for picker discovery."""
 
-    adapter_version = "1.2.5"
+    adapter_version = "1.2.6"
 
     async def _model_picker(self, page: Page) -> Locator:
         try:
