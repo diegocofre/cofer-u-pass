@@ -47,7 +47,7 @@ _MAX_OPTION_DISTANCE_PX = 520.0
 _MAX_OPTION_VIEWPORT_RATIO = 0.32
 _MAX_OPTION_LEFT_GAP_PX = 220.0
 _SIDEBAR_SURFACE_SELECTOR = (
-    "aside, nav, [data-sidebar-item], [data-testid*='sidebar' i], "
+    "aside, [data-sidebar-item], [data-testid*='sidebar' i], "
     "[data-testid*='history' i], [aria-label*='chat history' i], "
     "[aria-label*='conversation history' i], a[href^='/c/']"
 )
@@ -56,7 +56,7 @@ _SIDEBAR_SURFACE_SELECTOR = (
 async def _is_sidebar_like(candidate: Locator) -> bool:
     try:
         return bool(await candidate.evaluate(
-            "element => Boolean(element.closest(arguments[1]))",
+            "(element, sidebarSelector) => Boolean(element.closest(sidebarSelector))",
             _SIDEBAR_SURFACE_SELECTOR,
         ))
     except Exception:
@@ -155,6 +155,13 @@ async def _guarded_inference_click(page: Page, target: Locator, *, purpose: str)
         raise AdapterMismatch(
             f"ChatGPT {purpose} is outside the viewport; refusing Playwright auto-scroll; "
             f"target={probe.get('target')!r}"
+        )
+
+    if probe.get("sidebarHit") is not None:
+        raise AdapterMismatch(
+            f"ChatGPT {purpose} hit-test resolves to chat history/sidebar; refusing click; "
+            f"target={probe.get('target')!r}; hit={probe.get('hit')!r}; "
+            f"sidebar_hit={probe.get('sidebarHit')!r}"
         )
 
     if not probe.get("hitIsTarget"):
