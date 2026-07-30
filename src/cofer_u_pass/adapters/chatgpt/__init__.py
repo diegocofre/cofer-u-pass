@@ -25,11 +25,11 @@ _MODEL_PICKER_FALLBACK_SELECTORS = (
     "[data-testid*='model-switcher' i]",
     "button[aria-label*='model' i]",
     "[role='button'][aria-label*='model' i]",
-    "button",
-    "[role='button']",
+    "main button",
+    "main [role='button']",
 )
 
-_POPUP_SCOPE_SELECTOR = "[role='menu'], [role='listbox'], [role='dialog']"
+_POPUP_SCOPE_SELECTOR = "[role='menu'], [role='listbox']"
 _PREEXISTING_OPTION_MARKER = "data-cofer-u-pass-preexisting-option"
 _PREEXISTING_POPUP_MARKER = "data-cofer-u-pass-preexisting-popup"
 
@@ -61,9 +61,13 @@ async def _is_model_picker_candidate(candidate: Locator) -> bool:
 
     # Last-resort semantic fallback for current ChatGPT variants that render the
     # picker as an ordinary button/role=button with no popup or test-id metadata.
-    # Require the whole visible label to be the recognized model name so nearby
-    # UI such as "Upgrade to GPT-5.6 Pro" cannot be mistaken for the picker.
-    return _headline(label).casefold() == _headline(parsed[1]).casefold()
+    # Require both an exact model label and membership in the main application
+    # surface so a same-named chat-history/sidebar button cannot become a picker.
+    try:
+        in_main = await candidate.evaluate("element => Boolean(element.closest('main'))")
+    except Exception:
+        in_main = False
+    return in_main and _headline(label).casefold() == _headline(parsed[1]).casefold()
 
 
 def _css_attr_value(value: str) -> str:
