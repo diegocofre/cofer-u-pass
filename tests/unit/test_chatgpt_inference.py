@@ -73,7 +73,7 @@ def test_chatgpt_non_model_menu_rows_are_not_published_as_models():
 
 def test_chatgpt_registry_advertises_inference_capabilities_consistently():
     adapter = AdapterRegistry().create("chatgpt")
-    assert adapter.adapter_version == "1.2.6"
+    assert adapter.adapter_version == "1.2.7"
     assert "inference.model.discover" in adapter.capabilities
     assert "inference.model.select" in adapter.capabilities
     assert "inference.effort.select" in adapter.capabilities
