@@ -47,8 +47,14 @@ async def _nearby_interactive_controls(page: Page) -> list[dict[str, object]]:
                     const distance = Math.hypot(cx - composerCx, cy - composerCy);
                     if (distance > config.maxDistance) return null;
 
-                    const text = (element.innerText || element.textContent || '')
-                        .replace(/\s+/g, ' ').trim().slice(0, config.maxText);
+                    const canReadText = element.matches(
+                        "button, [role='button'], [aria-haspopup], " +
+                        "[tabindex]:not([tabindex='-1']), select, summary"
+                    );
+                    const text = canReadText
+                        ? (element.innerText || element.textContent || '')
+                            .replace(/\s+/g, ' ').trim().slice(0, config.maxText)
+                        : '';
 
                     return {
                         tag: element.tagName ? element.tagName.toLowerCase() : null,
@@ -253,12 +259,18 @@ async def _visible_model_mode_metadata(page: Page) -> list[dict[str, object]]:
                     const haystack = Object.values(attrs).filter(Boolean).join(' ');
                     if (!attrs.dataModel && !attrs.dataMode && !tokens.test(haystack)) continue;
 
+                    const canReadText = element.matches(
+                        "button, [role='button'], [aria-haspopup], [role='menuitem'], " +
+                        "[role='menuitemradio'], [role='option']"
+                    );
                     const row = {
                         tag: element.tagName ? element.tagName.toLowerCase() : null,
                         role: element.getAttribute('role'),
                         ...attrs,
-                        text: (element.innerText || element.textContent || '')
-                            .replace(/\s+/g, ' ').trim().slice(0, 80),
+                        text: canReadText
+                            ? (element.innerText || element.textContent || '')
+                                .replace(/\s+/g, ' ').trim().slice(0, 80)
+                            : '',
                         bbox: {
                             x: Math.round(rect.left),
                             y: Math.round(rect.top),
