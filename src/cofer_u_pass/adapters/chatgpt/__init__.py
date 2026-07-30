@@ -39,7 +39,9 @@ _EFFORT_PICKER_FALLBACK_SELECTORS = (
 _POPUP_SCOPE_SELECTOR = "[role='menu'], [role='listbox']"
 _PREEXISTING_OPTION_MARKER = "data-cofer-u-pass-preexisting-option"
 _PREEXISTING_POPUP_MARKER = "data-cofer-u-pass-preexisting-popup"
-_LOCAL_COMPOSER_ANCESTOR_DEPTH = 6
+_MAX_PICKER_DISTANCE_PX = 760.0
+_MAX_PICKER_VIEWPORT_RATIO = 0.45
+_MAX_PICKER_CENTER_X_DELTA_PX = 480.0
 _MAX_OPTION_DISTANCE_PX = 520.0
 _MAX_OPTION_VIEWPORT_RATIO = 0.32
 _MAX_OPTION_LEFT_GAP_PX = 220.0
@@ -58,21 +60,43 @@ async def _is_sidebar_like(candidate: Locator) -> bool:
 
 
 async def _is_composer_local(candidate: Locator) -> bool:
-    """Require weak picker evidence to share a close ancestor with the composer."""
+    """Require weak picker evidence to be structurally and spatially local to the composer."""
     try:
         return bool(await candidate.evaluate(
-            """(element, maxDepth) => {
+            """(element, limits) => {
                 const composer =
                     document.querySelector("[data-testid='composer']") ||
                     document.querySelector("#prompt-textarea");
                 if (!composer) return false;
-                let node = composer;
-                for (let depth = 0; node && depth <= maxDepth; depth += 1, node = node.parentElement) {
-                    if (node.contains(element)) return true;
+
+                let common = composer;
+                while (common && !common.contains(element)) common = common.parentElement;
+                if (!common || common === document.body || common === document.documentElement) {
+                    return false;
                 }
-                return false;
+
+                const composerRect = composer.getBoundingClientRect();
+                const candidateRect = element.getBoundingClientRect();
+                if (!composerRect.width || !composerRect.height ||
+                    !candidateRect.width || !candidateRect.height) {
+                    return false;
+                }
+
+                const composerCx = composerRect.left + composerRect.width / 2;
+                const composerCy = composerRect.top + composerRect.height / 2;
+                const candidateCx = candidateRect.left + candidateRect.width / 2;
+                const candidateCy = candidateRect.top + candidateRect.height / 2;
+                const diagonal = Math.hypot(window.innerWidth || 1280, window.innerHeight || 720);
+                const maxDistance = Math.min(limits.maxDistance, diagonal * limits.viewportRatio);
+
+                return Math.hypot(candidateCx - composerCx, candidateCy - composerCy) <= maxDistance &&
+                    Math.abs(candidateCx - composerCx) <= limits.maxCenterXDelta;
             }""",
-            _LOCAL_COMPOSER_ANCESTOR_DEPTH,
+            {
+                "maxDistance": _MAX_PICKER_DISTANCE_PX,
+                "viewportRatio": _MAX_PICKER_VIEWPORT_RATIO,
+                "maxCenterXDelta": _MAX_PICKER_CENTER_X_DELTA_PX,
+            },
         ))
     except Exception:
         return False
